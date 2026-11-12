@@ -1,0 +1,20 @@
+[package]
+name = "gpui-editor-ui"
+description = "Rich-text block editor component for GPUI, built on gpui-editor-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gpui = { package = "gpui-pre", version = "=0.3.4" }
+gpui-editor-core = { path = "../gpui-editor-core" }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[dev-dependencies]
+gpui = { package = "gpui-pre", version = "=0.3.4", features = ["test-support"] }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.4", features = ["x11", "wayland"] }
+
+[lints]
+workspace = true

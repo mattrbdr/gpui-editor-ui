@@ -1,0 +1,4 @@
+[env]
+# Charge fontconfig dynamiquement à l'exécution : évite d'exiger les paquets
+# de développement freetype/expat pour compiler gpui-pre sur Linux.
+RUST_FONTCONFIG_DLOPEN = "1"

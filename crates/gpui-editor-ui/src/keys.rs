@@ -1,0 +1,118 @@
+//! Actions et raccourcis clavier de l'éditeur.
+
+use gpui::{App, KeyBinding, actions};
+
+/// Contexte de touches des raccourcis de l'éditeur.
+pub const CONTEXT: &str = "GpuiEditor";
+
+actions!(
+    gpui_editor,
+    [
+        Backspace,
+        Delete,
+        Left,
+        Right,
+        Up,
+        Down,
+        SelectLeft,
+        SelectRight,
+        SelectUp,
+        SelectDown,
+        WordLeft,
+        WordRight,
+        SelectWordLeft,
+        SelectWordRight,
+        Home,
+        End,
+        SelectHome,
+        SelectEnd,
+        DocStart,
+        DocEnd,
+        SelectDocStart,
+        SelectDocEnd,
+        SelectAll,
+        Enter,
+        HardBreak,
+        Indent,
+        Outdent,
+        Undo,
+        Redo,
+        Copy,
+        Cut,
+        Paste,
+        Bold,
+        Italic,
+        Underline,
+        Strike,
+        Code,
+        Heading1,
+        Heading2,
+        Heading3,
+        CodeBlock,
+        BulletList,
+        OrderedList,
+        TaskList,
+        ToggleTask,
+        Cancel,
+    ]
+);
+
+/// Enregistre les raccourcis (variantes `ctrl` et `cmd`). À appeler une fois au démarrage.
+pub fn bind_keys(cx: &mut App) {
+    let ctx = Some(CONTEXT);
+    let mut bindings = vec![
+        KeyBinding::new("backspace", Backspace, ctx),
+        KeyBinding::new("delete", Delete, ctx),
+        KeyBinding::new("left", Left, ctx),
+        KeyBinding::new("right", Right, ctx),
+        KeyBinding::new("up", Up, ctx),
+        KeyBinding::new("down", Down, ctx),
+        KeyBinding::new("shift-left", SelectLeft, ctx),
+        KeyBinding::new("shift-right", SelectRight, ctx),
+        KeyBinding::new("shift-up", SelectUp, ctx),
+        KeyBinding::new("shift-down", SelectDown, ctx),
+        KeyBinding::new("home", Home, ctx),
+        KeyBinding::new("end", End, ctx),
+        KeyBinding::new("shift-home", SelectHome, ctx),
+        KeyBinding::new("shift-end", SelectEnd, ctx),
+        KeyBinding::new("enter", Enter, ctx),
+        KeyBinding::new("shift-enter", HardBreak, ctx),
+        KeyBinding::new("tab", Indent, ctx),
+        KeyBinding::new("shift-tab", Outdent, ctx),
+        KeyBinding::new("escape", Cancel, ctx),
+    ];
+    for modifier in ["ctrl", "cmd"] {
+        let k = |keys: &str| format!("{modifier}-{keys}");
+        bindings.extend([
+            KeyBinding::new(&k("left"), WordLeft, ctx),
+            KeyBinding::new(&k("right"), WordRight, ctx),
+            KeyBinding::new(&k("shift-left"), SelectWordLeft, ctx),
+            KeyBinding::new(&k("shift-right"), SelectWordRight, ctx),
+            KeyBinding::new(&k("home"), DocStart, ctx),
+            KeyBinding::new(&k("end"), DocEnd, ctx),
+            KeyBinding::new(&k("shift-home"), SelectDocStart, ctx),
+            KeyBinding::new(&k("shift-end"), SelectDocEnd, ctx),
+            KeyBinding::new(&k("a"), SelectAll, ctx),
+            KeyBinding::new(&k("z"), Undo, ctx),
+            KeyBinding::new(&k("shift-z"), Redo, ctx),
+            KeyBinding::new(&k("y"), Redo, ctx),
+            KeyBinding::new(&k("c"), Copy, ctx),
+            KeyBinding::new(&k("x"), Cut, ctx),
+            KeyBinding::new(&k("v"), Paste, ctx),
+            KeyBinding::new(&k("b"), Bold, ctx),
+            KeyBinding::new(&k("i"), Italic, ctx),
+            KeyBinding::new(&k("u"), Underline, ctx),
+            KeyBinding::new(&k("shift-x"), Strike, ctx),
+            KeyBinding::new(&k("e"), Code, ctx),
+            KeyBinding::new(&k("alt-1"), Heading1, ctx),
+            KeyBinding::new(&k("alt-2"), Heading2, ctx),
+            KeyBinding::new(&k("alt-3"), Heading3, ctx),
+            KeyBinding::new(&k("alt-c"), CodeBlock, ctx),
+            KeyBinding::new(&k("shift-8"), BulletList, ctx),
+            KeyBinding::new(&k("shift-7"), OrderedList, ctx),
+            KeyBinding::new(&k("shift-9"), TaskList, ctx),
+            KeyBinding::new(&k("enter"), ToggleTask, ctx),
+        ]);
+    }
+    cx.bind_keys(bindings);
+}

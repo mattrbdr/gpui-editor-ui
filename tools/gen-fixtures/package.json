@@ -1,0 +1,15 @@
+{
+  "name": "gen-fixtures",
+  "private": true,
+  "type": "module",
+  "description": "Génère les fixtures de référence avec le vrai @tiptap/markdown (cas synthétiques uniquement).",
+  "scripts": { "generate": "node gen.mjs" },
+  "dependencies": {
+    "@tiptap/core": "3.32.0",
+    "@tiptap/extension-image": "3.32.0",
+    "@tiptap/extension-task-item": "3.32.0",
+    "@tiptap/extension-task-list": "3.32.0",
+    "@tiptap/markdown": "3.32.0",
+    "@tiptap/starter-kit": "3.32.0"
+  }
+}

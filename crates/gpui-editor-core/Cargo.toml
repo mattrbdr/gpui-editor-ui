@@ -1,0 +1,16 @@
+[package]
+name = "gpui-editor-core"
+description = "Headless rich-text block document model with ProseMirror/TipTap JSON support (no UI dependency)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+pulldown-cmark = { version = "0.13", default-features = false }
+unicode-segmentation = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[lints]
+workspace = true
