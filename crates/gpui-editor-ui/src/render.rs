@@ -808,6 +808,7 @@ impl Render for EditorView {
             .on_action(cx.listener(Self::on_ordered_list))
             .on_action(cx.listener(Self::on_task_list))
             .on_action(cx.listener(Self::on_toggle_task))
+            .on_action(cx.listener(Self::on_link))
             .on_action(cx.listener(Self::on_cancel))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_move(cx.listener(Self::on_mouse_move))

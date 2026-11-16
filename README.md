@@ -72,15 +72,17 @@ Try it: `cargo run -p gpui-editor-ui --example spike [file.md]`
   emits `EditorEvent::MentionQuery(text)` as the query changes and the host answers with
   `EditorView::set_mention_items(vec![MentionItem { id, title, detail }], cx)`. Enter inserts the
   mention; Esc, a `]`, or moving the caret out of the query closes the menu.
-- **Marks** — bold, italic, underline, strike, code (Ctrl+B/I/U/Shift+X/E), links via
-  `Editor::set_link`.
+- **Marks** — bold, italic, underline, strike, code (Ctrl+B/I/U/Shift+X/E). **Links**: Ctrl+K emits
+  `EditorEvent::LinkRequested(current_href)` (the link, or the word under the caret, is selected) and the host
+  answers with `EditorView::apply_link(Some(url) | None, cx)`; Ctrl+click emits `EditorEvent::LinkClicked(href)`.
+  Dragging a selection past the top or bottom edge scrolls automatically.
 - **Embeds** — an unknown block node that carries a `viewId` attribute can be shown as a card (title,
   subtitle, small table) supplied by the host through `EditorView::set_embeds`; without a card it is
   shown as a `[name]` marker. Either way the node is preserved in the document.
 - **Theme** — `EditorTheme` (fonts, colors, sizes) is supplied by the application. Bold and italic need
   a font family that has them; `.SystemUIFont` does not render them everywhere.
 
-Known limits: no automatic scrolling to the caret, no caret blinking, no screen-reader accessibility
+Known limits: no screen-reader accessibility
 (GPUI), images and unknown nodes are shown as a `[name]` marker (they are kept in the document), and
 IME composition is tested through the input-handler API rather than with a real ibus keyboard.
 

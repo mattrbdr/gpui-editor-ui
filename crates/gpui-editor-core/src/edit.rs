@@ -1377,6 +1377,45 @@ impl Editor {
         });
     }
 
+    /// Lien touché par `pos` : début, fin et adresse. Le lien s'étend sur tous les caractères voisins
+    /// qui portent la même adresse.
+    #[must_use]
+    pub fn link_at(&self, pos: Pos) -> Option<(Pos, Pos, String)> {
+        let pos = self.clamp(pos);
+        let atoms = self.atoms(pos.block);
+        let href_of = |index: usize| -> Option<String> {
+            atoms
+                .get(index)?
+                .marks
+                .iter()
+                .find(|mark| mark.kind == MarkKind::Link)
+                .and_then(|mark| mark.attrs.get("href"))
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        };
+        let anchor = [Some(pos.offset), pos.offset.checked_sub(1)]
+            .into_iter()
+            .flatten()
+            .find(|index| href_of(*index).is_some())?;
+        let href = href_of(anchor)?;
+        let mut start = anchor;
+        while start > 0 && href_of(start - 1).as_deref() == Some(href.as_str()) {
+            start -= 1;
+        }
+        let mut end = anchor + 1;
+        while href_of(end).as_deref() == Some(href.as_str()) {
+            end += 1;
+        }
+        Some((Pos { block: pos.block, offset: start }, Pos { block: pos.block, offset: end }, href))
+    }
+
+    /// Sélectionne le lien touché par le curseur et retourne son adresse.
+    pub fn select_link_at_caret(&mut self) -> Option<String> {
+        let (start, end, href) = self.link_at(self.selection.head)?;
+        self.selection = Selection { anchor: start, head: end };
+        Some(href)
+    }
+
     /// Pose (`Some`) ou retire (`None`) un lien sur la sélection.
     pub fn set_link(&mut self, href: Option<&str>) {
         let href = href.map(str::to_owned);

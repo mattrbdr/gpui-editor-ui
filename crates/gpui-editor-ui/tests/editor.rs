@@ -650,3 +650,48 @@ fn page_down_and_page_up_move_the_caret_by_a_screenful(cx: &mut TestAppContext) 
     cx.simulate_keystrokes(any(window), "pageup");
     assert!(caret(cx, window).head.block < down, "pageup doit remonter");
 }
+
+#[gpui::test]
+fn dragging_below_the_viewport_scrolls_and_extends_the_selection(cx: &mut TestAppContext) {
+    let lines: Vec<String> = (0..200).map(|i| format!("ligne {i}")).collect();
+    let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let window = open(cx, doc(&refs));
+    set_caret(cx, window, 0, 0);
+    let moved = window
+        .update(cx, |view, _, cx| {
+            view.begin_selection_for_tests();
+            let bottom = view.scroll_viewport_bottom_for_tests();
+            view.autoscroll_for_tests(point(px(40.0), bottom + px(80.0)), cx)
+        })
+        .unwrap();
+    cx.run_until_parked();
+    assert!(moved, "le pointeur sous la zone visible fait défiler");
+    assert!(window.read_with(cx, |v, _| v.scroll_offset_y()).unwrap() < px(0.0));
+    assert!(caret(cx, window).head.block > 0, "la sélection s'étend vers le bas");
+    assert_eq!(caret(cx, window).anchor.block, 0);
+}
+
+#[gpui::test]
+fn ctrl_k_asks_for_a_link_and_apply_link_sets_it(cx: &mut TestAppContext) {
+    let window = open(cx, doc(&["voir la page"]));
+    let requests = std::rc::Rc::new(std::cell::RefCell::new(Vec::<Option<String>>::new()));
+    let sink = requests.clone();
+    let view = window.root(cx).unwrap();
+    cx.update(|cx| {
+        cx.subscribe(&view, move |_, event: &EditorEvent, _| {
+            if let EditorEvent::LinkRequested(current) = event {
+                sink.borrow_mut().push(current.clone());
+            }
+        })
+        .detach();
+    });
+    set_caret(cx, window, 0, 9); // dans « page »
+    cx.simulate_keystrokes(any(window), "ctrl-k");
+    assert_eq!(requests.borrow().as_slice(), [None], "pas encore de lien : demande vide");
+    assert_eq!(caret(cx, window).start().offset..caret(cx, window).end().offset, 8..12, "le mot est sélectionné");
+    window
+        .update(cx, |view, _, cx| view.apply_link(Some("https://exemple.fr"), cx))
+        .unwrap();
+    cx.simulate_keystrokes(any(window), "ctrl-k");
+    assert_eq!(requests.borrow().last().cloned().flatten().as_deref(), Some("https://exemple.fr"));
+}

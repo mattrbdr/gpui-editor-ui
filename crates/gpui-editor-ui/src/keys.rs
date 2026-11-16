@@ -57,6 +57,7 @@ actions!(
         PageDown,
         SelectPageUp,
         SelectPageDown,
+        Link,
         Cancel,
     ]
 );
@@ -112,6 +113,7 @@ pub fn bind_keys(cx: &mut App) {
             KeyBinding::new(&k("u"), Underline, ctx),
             KeyBinding::new(&k("shift-x"), Strike, ctx),
             KeyBinding::new(&k("e"), Code, ctx),
+            KeyBinding::new(&k("k"), Link, ctx),
             KeyBinding::new(&k("alt-1"), Heading1, ctx),
             KeyBinding::new(&k("alt-2"), Heading2, ctx),
             KeyBinding::new(&k("alt-3"), Heading3, ctx),

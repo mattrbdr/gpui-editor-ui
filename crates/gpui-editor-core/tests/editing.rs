@@ -496,3 +496,19 @@ fn double_click_helpers_select_a_word_or_a_block() {
     });
     assert_eq!(e.selection(), caret(0, 8));
 }
+
+#[test]
+fn a_link_is_found_from_inside_or_next_to_it_and_selected_whole() {
+    let blocks = r#"{"type":"paragraph","content":[{"type":"text","text":"va "},{"type":"text","text":"sur le site","marks":[{"type":"link","attrs":{"href":"https://exemple.fr","title":null}}]},{"type":"text","text":" ok"}]}"#;
+    let mut e = Editor::new(doc(blocks));
+    let start = Pos { block: 0, offset: 3 };
+    let end = Pos { block: 0, offset: 14 };
+    assert_eq!(e.link_at(Pos { block: 0, offset: 5 }), Some((start, end, "https://exemple.fr".to_owned())));
+    assert!(e.link_at(Pos { block: 0, offset: 14 }).is_some(), "juste après le lien");
+    assert!(e.link_at(Pos { block: 0, offset: 1 }).is_none());
+    e.set_selection(caret(0, 8));
+    assert_eq!(e.select_link_at_caret().as_deref(), Some("https://exemple.fr"));
+    assert_eq!((e.selection().start(), e.selection().end()), (start, end));
+    e.set_link(None);
+    assert!(e.link_at(Pos { block: 0, offset: 5 }).is_none(), "le lien est retiré en entier");
+}

@@ -59,6 +59,12 @@ pub enum EditorEvent {
     MentionQuery(String),
     /// Ctrl+clic sur une mention : identifiant de sa cible (par exemple `document:<uuid>`).
     MentionClicked(String),
+    /// Ctrl+K : l'application doit demander l'adresse d'un lien. Contient l'adresse actuelle si le
+    /// curseur est dans un lien (qui est alors sélectionné en entier), sinon `None` (le mot sous le curseur
+    /// est sélectionné s'il n'y a pas de sélection). Répondre par [`EditorView::apply_link`].
+    LinkRequested(Option<String>),
+    /// Ctrl+clic sur un lien : son adresse.
+    LinkClicked(String),
 }
 
 /// Texte en cours de composition (IME), dans un seul bloc ; décalages en caractères.
@@ -159,6 +165,8 @@ pub struct EditorView {
     pub(crate) caret_visible: bool,
     /// L'éditeur avait le focus au dernier dessin (le clignotement s'arrête sans focus).
     pub(crate) focused: bool,
+    /// La boucle de défilement automatique de la sélection tourne déjà.
+    autoscrolling: bool,
     _blink: Task<()>,
 }
 
@@ -230,6 +238,7 @@ impl EditorView {
             reveal_caret: false,
             caret_visible: true,
             focused: false,
+            autoscrolling: false,
             _blink: cx.spawn(async move |this, cx| {
                 loop {
                     cx.background_executor().timer(BLINK_INTERVAL).await;
@@ -953,11 +962,7 @@ impl EditorView {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn page(&mut self, direction: f32, extend: bool, cx: &mut Context<Self>) {
         let head = self.editor.selection().head;
-        let Some(line) = self
-            .layouts
-            .get(head.block)
-            .map(TextLayout::line_height)
-        else {
+        let Some(line) = self.layouts.get(head.block).map(TextLayout::line_height) else {
             return;
         };
         let lines = (self.scroll.bounds().size.height / line).floor().max(2.0) - 1.0;
@@ -1114,6 +1119,21 @@ impl EditorView {
         self.edit(cx, |e| e.toggle_mark(MarkKind::Strike));
     }
 
+    pub(crate) fn on_link(&mut self, _: &keys::Link, _: &mut Window, cx: &mut Context<Self>) {
+        let current = self.editor.select_link_at_caret();
+        if current.is_none() && self.editor.selection().is_collapsed() {
+            self.editor.select_word_at(self.editor.selection().head);
+        }
+        cx.emit(EditorEvent::LinkRequested(current));
+        cx.notify();
+    }
+
+    /// Pose (`Some`) ou retire (`None`) le lien sur la sélection courante ; réponse à
+    /// [`EditorEvent::LinkRequested`].
+    pub fn apply_link(&mut self, href: Option<&str>, cx: &mut Context<Self>) {
+        self.edit(cx, |e| e.set_link(href));
+    }
+
     pub(crate) fn on_code(&mut self, _: &keys::Code, _: &mut Window, cx: &mut Context<Self>) {
         self.edit(cx, |e| e.toggle_mark(MarkKind::Code));
     }
@@ -1241,7 +1261,15 @@ impl EditorView {
             cx.emit(EditorEvent::MentionClicked(id));
             return;
         }
+        if event.modifiers.control
+            && event.click_count == 1
+            && let Some((_, _, href)) = self.editor.link_at(pos)
+        {
+            cx.emit(EditorEvent::LinkClicked(href));
+            return;
+        }
         self.selecting = true;
+        self.start_autoscroll(window, cx);
         self.marked = None;
         self.goal_x = None;
         match event.click_count {
@@ -1270,6 +1298,83 @@ impl EditorView {
 
     pub(crate) fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, _: &mut Context<Self>) {
         self.selecting = false;
+    }
+
+    /// Un pas de défilement automatique : le pointeur est au-delà du bord haut ou bas de la zone visible
+    /// pendant une sélection. Fait défiler (vitesse proportionnelle à la distance) et étend la sélection
+    /// jusqu'au bord. Retourne vrai si le défilement a bougé.
+    pub(crate) fn autoscroll_step(&mut self, mouse: Point<Pixels>, cx: &mut Context<Self>) -> bool {
+        if !self.selecting {
+            return false;
+        }
+        let viewport = self.scroll.bounds();
+        let overshoot = if mouse.y < viewport.top() {
+            mouse.y - viewport.top()
+        } else if mouse.y > viewport.bottom() {
+            mouse.y - viewport.bottom()
+        } else {
+            return false;
+        };
+        let speed = (overshoot * 0.4).clamp(px(-40.0), px(40.0));
+        let offset = self.scroll.offset();
+        let y = (offset.y - speed).clamp(-self.scroll.max_offset().y, px(0.0));
+        let moved = y != offset.y;
+        if moved {
+            self.scroll.set_offset(point(offset.x, y));
+        }
+        let target = point(
+            mouse.x.clamp(viewport.left(), viewport.right()),
+            mouse.y.clamp(viewport.top(), viewport.bottom() - px(1.0)),
+        );
+        if let Some(pos) = self.hit_test(target) {
+            self.editor.move_to(pos, true);
+        }
+        cx.notify();
+        moved
+    }
+
+    /// Lance (une seule fois) la boucle qui fait défiler pendant qu'on glisse la souris hors de la zone.
+    fn start_autoscroll(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.autoscrolling {
+            return;
+        }
+        self.autoscrolling = true;
+        cx.spawn_in(window, async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(16))
+                    .await;
+                let keep = this.update_in(cx, |this, window, cx| {
+                    if !this.selecting {
+                        this.autoscrolling = false;
+                        return false;
+                    }
+                    let mouse = window.mouse_position();
+                    this.autoscroll_step(mouse, cx);
+                    true
+                });
+                if !matches!(keep, Ok(true)) {
+                    break;
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Un pas de défilement automatique avec un pointeur simulé (tests et intégrations).
+    pub fn autoscroll_for_tests(&mut self, mouse: Point<Pixels>, cx: &mut Context<Self>) -> bool {
+        self.autoscroll_step(mouse, cx)
+    }
+
+    /// Bord bas de la zone visible (tests et intégrations).
+    #[must_use]
+    pub fn scroll_viewport_bottom_for_tests(&self) -> Pixels {
+        self.scroll.bounds().bottom()
+    }
+
+    /// Commence une sélection à la souris (tests et intégrations).
+    pub fn begin_selection_for_tests(&mut self) {
+        self.selecting = true;
     }
 }
 
