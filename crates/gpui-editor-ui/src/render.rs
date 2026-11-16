@@ -4,8 +4,9 @@ use std::ops::Range;
 
 use gpui::{
     AnyElement, Context, ElementInputHandler, FontStyle, FontWeight, HighlightStyle, Hsla,
-    MouseButton, ParentElement, Render, StatefulInteractiveElement, StrikethroughStyle, Styled,
-    StyledText, TextLayout, UnderlineStyle, Window, canvas, deferred, div, fill, prelude::*, px,
+    MouseButton, ParentElement, PathBuilder, Render, StatefulInteractiveElement,
+    StrikethroughStyle, Styled, StyledText, TextLayout, UnderlineStyle, Window, canvas, deferred,
+    div, fill, point, prelude::*, px,
 };
 use gpui_editor_core::{Kind, MarkKind, Node};
 
@@ -593,28 +594,34 @@ impl EditorView {
         let mut rows = Vec::new();
         for (index, item) in list.content.iter().enumerate() {
             let first_block = *counter;
+            let checked = item.kind == Kind::TaskItem
+                && item
+                    .attrs
+                    .get("checked")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false);
             let marker: AnyElement = match (&list.kind, &item.kind) {
                 (Kind::OrderedList, _) => {
                     format!("{}.", start + i64::try_from(index).unwrap_or(0)).into_any_element()
                 }
-                (_, Kind::TaskItem) => {
-                    let checked = item
-                        .attrs
-                        .get("checked")
-                        .and_then(serde_json::Value::as_bool)
-                        .unwrap_or(false);
-                    div()
-                        .cursor_pointer()
-                        .child(if checked { "☑" } else { "☐" })
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(move |this, _, window, cx| {
-                                this.toggle_task_at(first_block, cx);
-                                window.focus(&this.focus_handle, cx);
-                            }),
-                        )
-                        .into_any_element()
-                }
+                (_, Kind::TaskItem) => div()
+                    .h(theme.line_height)
+                    .flex()
+                    .items_center()
+                    .child(checkbox(
+                        checked,
+                        theme.caret,
+                        theme.border,
+                        theme.background,
+                    ))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, window, cx| {
+                            this.toggle_task_at(first_block, cx);
+                            window.focus(&this.focus_handle, cx);
+                        }),
+                    )
+                    .into_any_element(),
                 _ => "•".into_any_element(),
             };
             let content = self.build_children(&item.content, counter, layouts, cx);
@@ -633,7 +640,15 @@ impl EditorView {
                             .line_height(theme.line_height)
                             .child(marker),
                     )
-                    .child(div().flex_1().flex().flex_col().gap_1().children(content)),
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .when(checked, |c| c.text_color(theme.muted))
+                            .children(content),
+                    ),
             );
         }
         div()
@@ -642,6 +657,48 @@ impl EditorView {
             .flex_col()
             .gap_1()
             .children(rows)
+            .into_any_element()
+    }
+}
+
+/// Case à cocher dessinée (carré arrondi, coche tracée) : indépendante des polices du système.
+fn checkbox(checked: bool, accent: Hsla, border: Hsla, mark: Hsla) -> AnyElement {
+    const SIDE: f32 = 16.0;
+    let base = div()
+        .id("gpui-editor-checkbox")
+        .size(px(SIDE))
+        .flex_none()
+        .rounded(px(4.0))
+        .cursor_pointer()
+        .border_1();
+    if checked {
+        base.border_color(accent)
+            .bg(accent)
+            .child(
+                canvas(
+                    |_, _, _| (),
+                    move |bounds, (), window, _| {
+                        let at = |x: f32, y: f32| {
+                            point(
+                                bounds.origin.x + bounds.size.width * x,
+                                bounds.origin.y + bounds.size.height * y,
+                            )
+                        };
+                        let mut path = PathBuilder::stroke(px(2.0));
+                        path.move_to(at(0.24, 0.53));
+                        path.line_to(at(0.43, 0.71));
+                        path.line_to(at(0.77, 0.31));
+                        if let Ok(path) = path.build() {
+                            window.paint_path(path, mark);
+                        }
+                    },
+                )
+                .size_full(),
+            )
+            .into_any_element()
+    } else {
+        base.border_color(border)
+            .hover(move |b| b.border_color(accent))
             .into_any_element()
     }
 }
