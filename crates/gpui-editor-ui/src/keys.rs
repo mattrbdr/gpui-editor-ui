@@ -53,6 +53,10 @@ actions!(
         OrderedList,
         TaskList,
         ToggleTask,
+        PageUp,
+        PageDown,
+        SelectPageUp,
+        SelectPageDown,
         Cancel,
     ]
 );
@@ -71,6 +75,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("shift-right", SelectRight, ctx),
         KeyBinding::new("shift-up", SelectUp, ctx),
         KeyBinding::new("shift-down", SelectDown, ctx),
+        KeyBinding::new("pageup", PageUp, ctx),
+        KeyBinding::new("pagedown", PageDown, ctx),
+        KeyBinding::new("shift-pageup", SelectPageUp, ctx),
+        KeyBinding::new("shift-pagedown", SelectPageDown, ctx),
         KeyBinding::new("home", Home, ctx),
         KeyBinding::new("end", End, ctx),
         KeyBinding::new("shift-home", SelectHome, ctx),

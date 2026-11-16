@@ -634,3 +634,19 @@ fn the_caret_blinks_only_while_focused_and_resets_on_typing(cx: &mut TestAppCont
     cx.simulate_input(any(window), "x");
     assert!(visible(cx), "taper le rallume aussitôt");
 }
+
+#[gpui::test]
+fn page_down_and_page_up_move_the_caret_by_a_screenful(cx: &mut TestAppContext) {
+    let lines: Vec<String> = (0..200).map(|i| format!("ligne {i}")).collect();
+    let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let window = open(cx, doc(&refs));
+    set_caret(cx, window, 0, 0);
+    cx.simulate_keystrokes(any(window), "pagedown");
+    let down = caret(cx, window).head.block;
+    assert!(
+        down > 3,
+        "pagedown doit sauter plusieurs lignes, obtenu {down}"
+    );
+    cx.simulate_keystrokes(any(window), "pageup");
+    assert!(caret(cx, window).head.block < down, "pageup doit remonter");
+}

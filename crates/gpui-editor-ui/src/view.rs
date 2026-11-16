@@ -947,6 +947,54 @@ impl EditorView {
         cx.notify();
     }
 
+    /// Déplace le curseur d'une « page » (hauteur visible moins une ligne), en gardant la colonne.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn page(&mut self, direction: f32, extend: bool, cx: &mut Context<Self>) {
+        let head = self.editor.selection().head;
+        let Some(line) = self
+            .layouts
+            .get(head.block)
+            .map(TextLayout::line_height)
+        else {
+            return;
+        };
+        let lines = (self.scroll.bounds().size.height / line).floor().max(2.0) - 1.0;
+        for _ in 0..(lines as usize) {
+            self.vertical(direction, extend, cx);
+        }
+    }
+
+    pub(crate) fn on_page_up(&mut self, _: &keys::PageUp, _: &mut Window, cx: &mut Context<Self>) {
+        self.page(-1.0, false, cx);
+    }
+
+    pub(crate) fn on_page_down(
+        &mut self,
+        _: &keys::PageDown,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.page(1.0, false, cx);
+    }
+
+    pub(crate) fn on_select_page_up(
+        &mut self,
+        _: &keys::SelectPageUp,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.page(-1.0, true, cx);
+    }
+
+    pub(crate) fn on_select_page_down(
+        &mut self,
+        _: &keys::SelectPageDown,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.page(1.0, true, cx);
+    }
+
     pub(crate) fn on_up(&mut self, _: &keys::Up, _: &mut Window, cx: &mut Context<Self>) {
         if self.slash_step(-1, cx) || self.mention_step(-1, cx) {
             return;
