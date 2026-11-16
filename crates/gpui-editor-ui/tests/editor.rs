@@ -498,17 +498,30 @@ fn double_brackets_open_a_menu_that_reports_queries_and_inserts_a_mention(cx: &m
         })
         .unwrap();
     cx.simulate_input(any(window), "voir [");
-    assert!(!window.read_with(cx, |v, _| v.mention_open()).unwrap(), "un seul crochet n'ouvre rien");
+    assert!(
+        !window.read_with(cx, |v, _| v.mention_open()).unwrap(),
+        "un seul crochet n'ouvre rien"
+    );
     cx.simulate_input(any(window), "[");
     assert!(window.read_with(cx, |v, _| v.mention_open()).unwrap());
-    assert_eq!(*queries.borrow(), [""], "la requête vide est signalée à l'ouverture");
+    assert_eq!(
+        *queries.borrow(),
+        [""],
+        "la requête vide est signalée à l'ouverture"
+    );
     cx.simulate_input(any(window), "al");
     assert_eq!(*queries.borrow(), ["", "a", "al"]);
-    window.update(cx, |view, _, cx| view.set_mention_items(mention_items(), cx)).unwrap();
+    window
+        .update(cx, |view, _, cx| {
+            view.set_mention_items(mention_items(), cx);
+        })
+        .unwrap();
     cx.simulate_keystrokes(any(window), "down up down enter");
     assert!(!window.read_with(cx, |v, _| v.mention_open()).unwrap());
     assert_eq!(texts(cx, window), ["voir [[Bêta]]"]);
-    let json = window.read_with(cx, |v, _| v.doc().to_json_string()).unwrap();
+    let json = window
+        .read_with(cx, |v, _| v.doc().to_json_string())
+        .unwrap();
     assert_eq!(
         json,
         r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"voir "},{"type":"mention","attrs":{"id":"document:1","label":"Bêta","mentionSuggestionChar":"[["}}]}]}"#
@@ -518,22 +531,32 @@ fn double_brackets_open_a_menu_that_reports_queries_and_inserts_a_mention(cx: &m
 }
 
 #[gpui::test]
-fn the_mention_menu_closes_on_escape_a_closing_bracket_or_when_the_caret_leaves(cx: &mut TestAppContext) {
+fn the_mention_menu_closes_on_escape_a_closing_bracket_or_when_the_caret_leaves(
+    cx: &mut TestAppContext,
+) {
     let window = open_empty(cx);
     cx.simulate_input(any(window), "[[ab");
     assert!(window.read_with(cx, |v, _| v.mention_open()).unwrap());
     cx.simulate_keystrokes(any(window), "escape");
     assert!(!window.read_with(cx, |v, _| v.mention_open()).unwrap());
     cx.simulate_input(any(window), " [[x]");
-    assert!(!window.read_with(cx, |v, _| v.mention_open()).unwrap(), "un crochet fermant ferme le menu");
+    assert!(
+        !window.read_with(cx, |v, _| v.mention_open()).unwrap(),
+        "un crochet fermant ferme le menu"
+    );
     let reopened = open_empty(cx);
     cx.simulate_input(any(reopened), "[[x");
     cx.simulate_keystrokes(any(reopened), "left left left");
-    assert!(!reopened.read_with(cx, |v, _| v.mention_open()).unwrap(), "le curseur est sorti de la requête");
+    assert!(
+        !reopened.read_with(cx, |v, _| v.mention_open()).unwrap(),
+        "le curseur est sorti de la requête"
+    );
 }
 
 #[gpui::test]
-fn ctrl_click_on_a_mention_reports_its_target_but_a_plain_click_only_moves_the_caret(cx: &mut TestAppContext) {
+fn ctrl_click_on_a_mention_reports_its_target_but_a_plain_click_only_moves_the_caret(
+    cx: &mut TestAppContext,
+) {
     let source = r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"mention","attrs":{"id":"document:42","label":"Cible","mentionSuggestionChar":"[["}},{"type":"text","text":" suite"}]}]}"#;
     let window = open(cx, Node::from_json_str(source).unwrap());
     let clicks = std::rc::Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
@@ -550,11 +573,64 @@ fn ctrl_click_on_a_mention_reports_its_target_but_a_plain_click_only_moves_the_c
         })
         .unwrap();
     cx.run_until_parked();
-    let (top, left) = window.read_with(cx, |view, _| view.block_origin_for_tests(0)).unwrap().expect("mise en page");
+    let (top, left) = window
+        .read_with(cx, |view, _| view.block_origin_for_tests(0))
+        .unwrap()
+        .expect("mise en page");
     let origin = point(left + px(24.0), top + px(6.0));
     let mut vcx = VisualTestContext::from_window(any(window), cx);
-    vcx.simulate_click(origin, Modifiers { control: true, ..Modifiers::default() });
+    vcx.simulate_click(
+        origin,
+        Modifiers {
+            control: true,
+            ..Modifiers::default()
+        },
+    );
     assert_eq!(*clicks.borrow(), ["document:42"]);
     vcx.simulate_click(origin, Modifiers::default());
-    assert_eq!(clicks.borrow().len(), 1, "un clic simple ne suit pas le lien");
+    assert_eq!(
+        clicks.borrow().len(),
+        1,
+        "un clic simple ne suit pas le lien"
+    );
+}
+
+#[gpui::test]
+fn moving_the_caret_far_down_scrolls_it_into_view(cx: &mut TestAppContext) {
+    let lines: Vec<String> = (0..200).map(|i| format!("ligne {i}")).collect();
+    let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let window = open(cx, doc(&refs));
+    let offset = |cx: &mut TestAppContext| {
+        window
+            .read_with(cx, |view, _| view.scroll_offset_y())
+            .unwrap()
+    };
+    assert_eq!(offset(cx), px(0.0), "au début, rien n'a défilé");
+    cx.simulate_keystrokes(any(window), "ctrl-end");
+    cx.run_until_parked();
+    assert!(
+        offset(cx) < px(0.0),
+        "ctrl-fin doit faire défiler vers le curseur"
+    );
+    let scrolled = offset(cx);
+    cx.simulate_keystrokes(any(window), "ctrl-home");
+    cx.run_until_parked();
+    assert!(offset(cx) > scrolled, "ctrl-début doit remonter");
+}
+
+#[gpui::test]
+fn the_caret_blinks_only_while_focused_and_resets_on_typing(cx: &mut TestAppContext) {
+    let window = open(cx, doc(&["abc"]));
+    let visible = |cx: &mut TestAppContext| {
+        window
+            .read_with(cx, |view, _| view.caret_visible_for_tests())
+            .unwrap()
+    };
+    assert!(visible(cx));
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(540));
+    cx.run_until_parked();
+    assert!(!visible(cx), "le curseur s'éteint après une demi-période");
+    cx.simulate_input(any(window), "x");
+    assert!(visible(cx), "taper le rallume aussitôt");
 }

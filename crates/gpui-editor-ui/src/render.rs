@@ -85,7 +85,12 @@ fn text_and_styles(
                 let attrs = &child.attrs;
                 let label = ["label", "id"]
                     .iter()
-                    .find_map(|key| attrs.get(*key).and_then(|v| v.as_str()).filter(|v| !v.is_empty()))
+                    .find_map(|key| {
+                        attrs
+                            .get(*key)
+                            .and_then(|v| v.as_str())
+                            .filter(|v| !v.is_empty())
+                    })
                     .unwrap_or("Lien");
                 let start = text.len();
                 text.push_str("[[");
@@ -279,12 +284,29 @@ impl EditorView {
             .text_size(px(12.0))
             .text_color(theme.muted)
             .children(card.columns.iter().enumerate().map(|(index, column)| {
-                div().flex_1().min_w(px(0.0)).overflow_hidden().whitespace_nowrap().when(index == 0, |c| c.flex_grow(2.0)).child(column.clone())
+                div()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .overflow_hidden()
+                    .whitespace_nowrap()
+                    .when(index == 0, |c| c.flex_grow(2.0))
+                    .child(column.clone())
             }));
         let rows = card.rows.iter().map(|row| {
-            div().flex().gap_3().py_0p5().children(row.iter().enumerate().map(|(index, cell)| {
-                div().flex_1().min_w(px(0.0)).overflow_hidden().whitespace_nowrap().text_ellipsis().when(index == 0, |c| c.flex_grow(2.0)).child(cell.clone())
-            }))
+            div()
+                .flex()
+                .gap_3()
+                .py_0p5()
+                .children(row.iter().enumerate().map(|(index, cell)| {
+                    div()
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
+                        .when(index == 0, |c| c.flex_grow(2.0))
+                        .child(cell.clone())
+                }))
         });
         div()
             .w_full()
@@ -299,8 +321,17 @@ impl EditorView {
             .flex()
             .flex_col()
             .gap_1()
-            .child(div().font_weight(FontWeight::SEMIBOLD).child(card.title.clone()))
-            .child(div().text_size(px(12.0)).text_color(theme.muted).child(card.subtitle.clone()))
+            .child(
+                div()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(card.title.clone()),
+            )
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(theme.muted)
+                    .child(card.subtitle.clone()),
+            )
             .when(!card.columns.is_empty(), |c| c.child(header))
             .children(rows)
             .into_any_element()
@@ -311,7 +342,14 @@ impl EditorView {
         let theme = &self.theme;
         let selected = self.mention.map_or(0, |mention| mention.selected);
         let rows: Vec<AnyElement> = if self.mention_items.is_empty() {
-            vec![div().px_2().py_1().text_color(theme.muted).child("Aucun résultat").into_any_element()]
+            vec![
+                div()
+                    .px_2()
+                    .py_1()
+                    .text_color(theme.muted)
+                    .child("Aucun résultat")
+                    .into_any_element(),
+            ]
         } else {
             self.mention_items
                 .iter()
@@ -518,7 +556,11 @@ impl EditorView {
                     .and_then(serde_json::Value::as_str)
                     .is_some_and(|id| self.embeds.contains_key(id)) =>
             {
-                let key = node.attrs.get("viewId").and_then(serde_json::Value::as_str).unwrap_or_default();
+                let key = node
+                    .attrs
+                    .get("viewId")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default();
                 self.embed_card(&self.embeds[key])
             }
             Kind::Other(name) => {
@@ -612,19 +654,32 @@ fn overlay(cx: &Context<EditorView>, selection: Hsla, caret_color: Hsla) -> AnyE
         move |bounds, _, window, cx| {
             let focus = entity.read(cx).focus_handle.clone();
             window.handle_input(&focus, ElementInputHandler::new(bounds, entity.clone()), cx);
-            let (quads, caret) = {
+            let (quads, caret, visible) = {
                 let view = entity.read(cx);
-                (view.selection_quads(), view.caret_bounds())
+                (
+                    view.selection_quads(),
+                    view.caret_bounds(),
+                    view.caret_visible,
+                )
             };
             for quad in quads {
                 window.paint_quad(fill(quad, selection));
             }
-            if focus.is_focused(window)
+            let focused = focus.is_focused(window);
+            if focused
+                && visible
                 && let Some(caret) = caret
             {
                 window.paint_quad(fill(caret, caret_color));
             }
-            entity.update(cx, |view, _| view.painted = true);
+            entity.update(cx, |view, cx| {
+                view.painted = true;
+                view.focused = focused;
+                // Le défilement ne prend effet qu'au dessin suivant : en demander un.
+                if view.reveal_caret_now() {
+                    cx.notify();
+                }
+            });
         },
     )
     .absolute()
@@ -702,6 +757,7 @@ impl Render for EditorView {
                     .id("gpui-editor-scroll")
                     .size_full()
                     .overflow_y_scroll()
+                    .track_scroll(&self.scroll)
                     .child(
                         div()
                             .relative()

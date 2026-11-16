@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use gpui::{
     App, Bounds, ClipboardItem, Context, EntityInputHandler, EventEmitter, FocusHandle, Focusable,
-    Hsla, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
-    TextLayout, UTF16Selection, Window, hsla, point, px, size,
+    Hsla, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollHandle,
+    SharedString, Task, TextLayout, UTF16Selection, Window, hsla, point, px, size,
 };
 use gpui_editor_core::{BlockCommand, Editor, Kind, MarkKind, Node, Pos, Selection};
 
@@ -133,6 +133,7 @@ pub(crate) const SLASH_COMMANDS: [(&str, &str, BlockCommand); 10] = [
 ];
 
 /// Composant d'édition : un document, sa sélection et son historique.
+#[allow(clippy::struct_excessive_bools)]
 pub struct EditorView {
     pub(crate) editor: Editor,
     pub(crate) theme: EditorTheme,
@@ -150,7 +151,21 @@ pub struct EditorView {
     pub(crate) embeds: std::collections::HashMap<String, EmbedCard>,
     /// Bloc de code dont le bouton « Copier » vient d'être utilisé.
     pub(crate) copied: Option<usize>,
+    /// Défilement vertical du document.
+    pub(crate) scroll: ScrollHandle,
+    /// Le prochain dessin doit ramener le curseur dans la zone visible.
+    pub(crate) reveal_caret: bool,
+    /// Phase visible du clignotement du curseur.
+    pub(crate) caret_visible: bool,
+    /// L'éditeur avait le focus au dernier dessin (le clignotement s'arrête sans focus).
+    pub(crate) focused: bool,
+    _blink: Task<()>,
 }
+
+/// Demi-période du clignotement du curseur.
+const BLINK_INTERVAL: Duration = Duration::from_millis(530);
+/// Marge (px) gardée autour du curseur lorsqu'on le ramène dans la zone visible.
+const REVEAL_MARGIN: f32 = 24.0;
 
 impl EventEmitter<EditorEvent> for EditorView {}
 
@@ -211,7 +226,68 @@ impl EditorView {
             mention_query: String::new(),
             embeds: std::collections::HashMap::new(),
             copied: None,
+            scroll: ScrollHandle::new(),
+            reveal_caret: false,
+            caret_visible: true,
+            focused: false,
+            _blink: cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor().timer(BLINK_INTERVAL).await;
+                    let alive = this.update(cx, |view, cx| {
+                        if view.focused {
+                            view.caret_visible = !view.caret_visible;
+                            cx.notify();
+                        }
+                    });
+                    if alive.is_err() {
+                        break;
+                    }
+                }
+            }),
         }
+    }
+
+    /// Le curseur vient de bouger : le montrer sans attendre le clignotement et le ramener dans la vue.
+    fn caret_moved(&mut self) {
+        self.caret_visible = true;
+        self.reveal_caret = true;
+    }
+
+    /// Ramène le curseur dans la zone visible du défilement ; vrai si le défilement a changé.
+    pub(crate) fn reveal_caret_now(&mut self) -> bool {
+        if !std::mem::take(&mut self.reveal_caret) {
+            return false;
+        }
+        let Some(caret) = self.caret_bounds() else {
+            return false;
+        };
+        let viewport = self.scroll.bounds();
+        let margin = px(REVEAL_MARGIN).min(viewport.size.height / 4.0);
+        let offset = self.scroll.offset();
+        let mut y = offset.y;
+        if caret.top() < viewport.top() + margin {
+            y += viewport.top() + margin - caret.top();
+        } else if caret.bottom() > viewport.bottom() - margin {
+            y -= caret.bottom() - (viewport.bottom() - margin);
+        }
+        let y = y.clamp(-self.scroll.max_offset().y, px(0.0));
+        if y == offset.y {
+            return false;
+        }
+        self.scroll.set_offset(point(offset.x, y));
+        true
+    }
+
+    /// Phase visible du clignotement (tests et intégrations).
+    #[must_use]
+    pub fn caret_visible_for_tests(&self) -> bool {
+        self.caret_visible
+    }
+
+    /// Décalage vertical du défilement (tests et intégrations).
+    #[must_use]
+    pub fn scroll_offset_y(&self) -> Pixels {
+        self.scroll.offset().y
     }
 
     /// Document courant.
@@ -246,6 +322,7 @@ impl EditorView {
 
     pub(crate) fn changed(&mut self, cx: &mut Context<Self>) {
         self.goal_x = None;
+        self.caret_moved();
         self.sync_slash();
         self.sync_mention(cx);
         cx.emit(EditorEvent::Changed);
@@ -441,7 +518,10 @@ impl EditorView {
             && head.offset >= menu.start + 2
             && chars.get(menu.start) == Some(&'[')
             && chars.get(menu.start + 1) == Some(&'[');
-        let query: String = chars.get(menu.start + 2..head.offset.min(chars.len()))?.iter().collect();
+        let query: String = chars
+            .get(menu.start + 2..head.offset.min(chars.len()))?
+            .iter()
+            .collect();
         (opened && !query.contains([']', '\n']) && query.chars().count() <= 80).then_some(query)
     }
 
@@ -457,7 +537,11 @@ impl EditorView {
         }
         let chars: Vec<char> = self.editor.block_text(head.block).chars().collect();
         if chars.get(head.offset - 2) == Some(&'[') && chars.get(head.offset - 1) == Some(&'[') {
-            self.mention = Some(MentionMenu { block: head.block, start: head.offset - 2, selected: 0 });
+            self.mention = Some(MentionMenu {
+                block: head.block,
+                start: head.offset - 2,
+                selected: 0,
+            });
             self.mention_items.clear();
             self.mention_query = "\u{0}".into();
         }
@@ -487,7 +571,9 @@ impl EditorView {
         if self.mention.is_some() {
             self.mention_items = items;
             if let Some(menu) = self.mention.as_mut() {
-                menu.selected = menu.selected.min(self.mention_items.len().saturating_sub(1));
+                menu.selected = menu
+                    .selected
+                    .min(self.mention_items.len().saturating_sub(1));
             }
             cx.notify();
         }
@@ -511,14 +597,18 @@ impl EditorView {
 
     /// Insère la cible `index` du menu à la place de `[[requête`.
     pub(crate) fn run_mention(&mut self, index: usize, cx: &mut Context<Self>) {
-        let (Some(menu), Some(item)) = (self.mention, self.mention_items.get(index).cloned()) else {
+        let (Some(menu), Some(item)) = (self.mention, self.mention_items.get(index).cloned())
+        else {
             return;
         };
         let head = self.editor.selection().head;
         self.mention = None;
         self.mention_items.clear();
         self.editor.insert_mention(
-            Pos { block: menu.block, offset: menu.start },
+            Pos {
+                block: menu.block,
+                offset: menu.start,
+            },
             head,
             &item.id,
             &item.title,
@@ -529,7 +619,9 @@ impl EditorView {
 
     fn mention_step(&mut self, delta: isize, cx: &mut Context<Self>) -> bool {
         let count = self.mention_items.len();
-        let Some(menu) = self.mention.as_mut() else { return false };
+        let Some(menu) = self.mention.as_mut() else {
+            return false;
+        };
         if count == 0 {
             return false;
         }
@@ -690,6 +782,7 @@ impl EditorView {
     fn nav(&mut self, cx: &mut Context<Self>, run: impl FnOnce(&mut Editor)) {
         run(&mut self.editor);
         self.goal_x = None;
+        self.caret_moved();
         self.sync_slash();
         self.sync_mention(cx);
         cx.notify();
@@ -850,6 +943,7 @@ impl EditorView {
             self.editor.move_to(pos, extend);
         }
         self.goal_x = goal;
+        self.caret_moved();
         cx.notify();
     }
 
@@ -1105,6 +1199,7 @@ impl EditorView {
             2 => self.editor.select_word_at(pos),
             _ => self.editor.select_block(pos.block),
         }
+        self.caret_visible = true;
         cx.notify();
     }
 
