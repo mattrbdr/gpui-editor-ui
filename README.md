@@ -9,7 +9,7 @@ UI-independent document core.
 - **`gpui-editor-ui`** — a GPUI component (`EditorView`): rendering, caret, selection, mouse,
   keyboard, clipboard, IME, slash menu, mention menu and code-block copy button.
 
-> Status: early (0.1). Both crates work and are covered by tests (110). Nothing is published on
+> Status: early (0.1). Both crates work and are covered by tests (111). Nothing is published on
 > crates.io yet — depend on it through git.
 
 ```toml
@@ -134,9 +134,4 @@ with real exports.
 
 ## License
 
-Dual-licensed under either of
-
-- [Apache License, Version 2.0](LICENSE-APACHE)
-- [MIT license](LICENSE-MIT)
-
-at your option.
+[MIT](LICENSE) — Copyright (c) 2026 Mattéo Ribardiere.
