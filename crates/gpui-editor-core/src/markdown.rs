@@ -152,6 +152,11 @@ fn block(node: &Node, siblings: &[Node], index: usize, compat: bool) -> String {
         Kind::Other(name) if name == "image" => image(node, compat),
         Kind::Text | Kind::HardBreak => inline(std::slice::from_ref(node), compat),
         Kind::Doc => blocks(&node.content, compat),
+        // Les mentions `[[titre]]` ne disparaissent pas à l'export (CommonMark) ; la variante TipTap les ignore, comme TipTap.
+        Kind::Other(name) if name == "mention" && !compat => ["label", "id"]
+            .iter()
+            .find_map(|key| node.attrs.get(*key).and_then(serde_json::Value::as_str).filter(|v| !v.is_empty()))
+            .map_or_else(String::new, |label| format!("[[{label}]]")),
         Kind::Other(_) => String::new(),
     }
 }

@@ -321,6 +321,8 @@ impl EditorView {
     }
 
     pub(crate) fn changed(&mut self, cx: &mut Context<Self>) {
+        // Les dispositions de texte datent d'avant la modification : plus de `hit_test` dessus avant le prochain dessin.
+        self.painted = false;
         self.goal_x = None;
         self.caret_moved();
         self.sync_slash();

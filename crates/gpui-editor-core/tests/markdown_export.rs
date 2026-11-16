@@ -181,3 +181,12 @@ fn whitespace_stays_outside_emphasis_delimiters() {
     let source = r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x"},{"type":"text","marks":[{"type":"bold"}],"text":" a "},{"type":"text","text":"y"}]}]}"#;
     assert_eq!(clean(source), "x **a** y");
 }
+
+#[test]
+fn commonmark_export_keeps_mentions_as_double_brackets() {
+    let doc = Node::from_json_str(
+        r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Voir "},{"type":"mention","attrs":{"id":"document:d1","label":"Procédure"}},{"type":"text","text":"."}]}]}"#,
+    )
+    .unwrap();
+    assert_eq!(doc.to_markdown(), "Voir [[Procédure]].");
+}

@@ -408,11 +408,12 @@ fn unknown_blocks_are_preserved_and_skipped() {
     assert_eq!(e.block_count(), 2);
     e.set_selection(caret(1, 0));
     e.delete_backward();
-    assert_eq!(texts(&e), ["ab"]);
-    assert!(
-        !e.doc().to_json_string().contains("databaseView"),
-        "supprimé car entre les deux extrémités fusionnées"
-    );
+    assert_eq!(texts(&e), ["a", "b"], "Retour arrière ne fusionne pas par-dessus un bloc inconnu");
+    assert!(e.doc().to_json_string().contains("databaseView"));
+    e.set_selection(caret(0, 1));
+    e.delete_forward();
+    assert_eq!(texts(&e), ["a", "b"], "Suppr non plus");
+    assert!(e.doc().to_json_string().contains("databaseView"));
     let mut e2 = Editor::new(doc(&blocks));
     e2.set_selection(caret(0, 1));
     e2.insert_text("x");

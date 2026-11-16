@@ -797,7 +797,30 @@ impl Editor {
         self.selection = Selection::caret(pos);
     }
 
+    /// Un bloc inconnu (vue de base de données, image…) se trouve entre les blocs de texte `first` et `last`.
+    fn unknown_block_between(&self, first: usize, last: usize) -> bool {
+        let textblocks = self.textblocks();
+        let order = blocks_in_order(&self.doc);
+        let position = |block: usize| order.iter().position(|(path, _)| *path == textblocks[block]);
+        let (Some(from), Some(to)) = (position(first), position(last)) else {
+            return false;
+        };
+        order[from + 1..to]
+            .iter()
+            .any(|(path, text)| !*text && matches!(node_at(&self.doc, path).kind, Kind::Other(_)))
+    }
+
     pub fn delete_backward(&mut self) {
+        // Fusionner par-dessus un bloc inconnu le supprimerait sans que l'utilisateur le voie : on ne fait rien.
+        let head = self.selection.head;
+        if self.selection.is_collapsed()
+            && head.offset == 0
+            && self.block_kind(head.block) == Kind::Paragraph
+            && head.block > 0
+            && self.unknown_block_between(head.block - 1, head.block)
+        {
+            return;
+        }
         self.checkpoint();
         if !self.selection.is_collapsed() {
             self.delete_selection_inner();
@@ -827,6 +850,14 @@ impl Editor {
     }
 
     pub fn delete_forward(&mut self) {
+        let head = self.selection.head;
+        if self.selection.is_collapsed()
+            && head.offset == self.block_len(head.block)
+            && head.block + 1 < self.block_count()
+            && self.unknown_block_between(head.block, head.block + 1)
+        {
+            return;
+        }
         self.checkpoint();
         if !self.selection.is_collapsed() {
             self.delete_selection_inner();
