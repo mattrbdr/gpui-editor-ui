@@ -1,9 +1,7 @@
-//! Moteur d'édition sans interface : sélection, saisie, suppression, blocs, marques, listes,
-//! annuler/rétablir.
+//! Headless editing engine: selection, typing, deletion, blocks, marks, lists, undo/redo.
 //!
-//! Une position est un couple (bloc de texte, décalage en caractères). Les blocs de texte sont
-//! numérotés dans l'ordre du document ; les blocs sans texte (règle, nœuds inconnus) sont conservés
-//! mais ne portent pas de curseur.
+//! A position is a (text block, character offset) pair. Text blocks are numbered in document
+//! order; blocks without text (rules, unknown nodes) are kept but cannot hold the cursor.
 
 mod atoms;
 mod history;
@@ -22,14 +20,14 @@ use crate::{Kind, Mark, Node};
 use atoms::{Atom, atoms_of, flat_text, rebuild};
 use tree::{Path, blocks_in_order, node_at, node_at_mut};
 
-/// Position du curseur : numéro du bloc de texte et décalage en caractères dans ce bloc.
+/// Cursor position: index of the text block and character offset within that block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Pos {
     pub block: usize,
     pub offset: usize,
 }
 
-/// Sélection : `anchor` est fixe, `head` bouge.
+/// Selection: `anchor` is fixed, `head` moves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Selection {
     pub anchor: Pos,
@@ -67,7 +65,7 @@ struct Snapshot {
     selection: Selection,
 }
 
-/// Type de bloc que l'on peut insérer (menu `/`).
+/// Block type that can be inserted (`/` menu).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockCommand {
     Paragraph,
@@ -80,7 +78,7 @@ pub enum BlockCommand {
     Rule,
 }
 
-/// Document en cours d'édition avec sa sélection et son historique.
+/// Document being edited, with its selection and history.
 #[derive(Debug, Clone)]
 pub struct Editor {
     doc: Node,
@@ -96,7 +94,7 @@ pub struct Editor {
 const HISTORY_LIMIT: usize = 500;
 
 impl Editor {
-    /// Ouvre un document ; un document sans bloc de texte reçoit un paragraphe vide.
+    /// Opens a document; a document without any text block gets an empty paragraph.
     #[must_use]
     pub fn new(mut doc: Node) -> Self {
         if !blocks_in_order(&doc).iter().any(|(_, text)| *text) {
@@ -178,7 +176,7 @@ impl Editor {
         rebuild(node_at_mut(self.doc_mut(), &path), atoms);
     }
 
-    /// Texte du bloc (un saut de ligne pour chaque saut dur).
+    /// Text of the block (a line break for each hard break).
     #[must_use]
     pub fn block_text(&self, block: usize) -> String {
         flat_text(&self.atoms(block))
@@ -194,7 +192,7 @@ impl Editor {
         node_at(&self.doc, &self.path_of(block)).kind.clone()
     }
 
-    /// Nœud du bloc de texte (pour le rendu).
+    /// Node of the text block (for rendering).
     #[must_use]
     pub fn block_node(&self, block: usize) -> &Node {
         node_at(&self.doc, &self.path_of(block))

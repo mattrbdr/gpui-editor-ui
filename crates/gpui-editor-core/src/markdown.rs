@@ -1,38 +1,38 @@
-//! Export Markdown.
+//! Markdown export.
 //!
-//! Deux saveurs : [`Flavor::CommonMark`] (par défaut) produit du CommonMark/GFM correct ;
-//! [`Flavor::TipTapCompat`] reproduit le sérialiseur de `@tiptap/markdown` (entités HTML, échappements
-//! limités, saut de ligne à deux espaces…) pour qu'un export reste identique à celui d'une application
-//! TipTap.
+//! Two flavors: [`Flavor::CommonMark`] (the default) produces correct CommonMark/GFM;
+//! [`Flavor::TipTapCompat`] reproduces the `@tiptap/markdown` serializer (HTML entities, limited
+//! escaping, two-space line breaks…) so that an export stays identical to that of a TipTap
+//! application.
 
 use serde_json::Value;
 
 use crate::{Kind, Mark, MarkKind, Node};
 
-/// Variante de Markdown produite.
+/// Markdown variant to produce.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Flavor {
-    /// CommonMark avec les extensions GFM (barré, tâches) ; texte échappé correctement.
+    /// CommonMark with the GFM extensions (strikethrough, task lists); text is escaped correctly.
     #[default]
     CommonMark,
-    /// Reproduit `@tiptap/markdown`, défauts compris.
+    /// Reproduces `@tiptap/markdown`, quirks included.
     TipTapCompat,
 }
 
-/// Options d'export.
+/// Export options.
 #[derive(Debug, Clone, Default)]
 pub struct MarkdownOptions {
     pub flavor: Flavor,
 }
 
 impl Node {
-    /// Markdown CommonMark du nœud (sans saut de ligne final).
+    /// CommonMark Markdown of the node (without a trailing line break).
     #[must_use]
     pub fn to_markdown(&self) -> String {
         self.to_markdown_with(&MarkdownOptions::default())
     }
 
-    /// Markdown du nœud avec la saveur choisie.
+    /// Markdown of the node in the chosen flavor.
     #[must_use]
     pub fn to_markdown_with(&self, options: &MarkdownOptions) -> String {
         let compat = options.flavor == Flavor::TipTapCompat;
@@ -152,7 +152,8 @@ fn block(node: &Node, siblings: &[Node], index: usize, compat: bool) -> String {
         Kind::Other(name) if name == "image" => image(node, compat),
         Kind::Text | Kind::HardBreak => inline(std::slice::from_ref(node), compat),
         Kind::Doc => blocks(&node.content, compat),
-        // Les mentions `[[titre]]` ne disparaissent pas à l'export (CommonMark) ; la variante TipTap les ignore, comme TipTap.
+        // `[[title]]` mentions are kept in the CommonMark export; the TipTap flavor drops them,
+        // like TipTap does.
         Kind::Other(name) if name == "mention" && !compat => ["label", "id"]
             .iter()
             .find_map(|key| {
@@ -217,7 +218,7 @@ fn escape_link_text(text: &str) -> String {
         .replace(']', "\\]")
 }
 
-/// Cible de lien : entre chevrons si elle contient un espace ou des parenthèses déséquilibrées.
+/// Link destination: wrapped in angle brackets if it contains whitespace or unbalanced parentheses.
 fn link_destination(href: &str) -> String {
     let mut depth = 0i32;
     let mut balanced = true;
@@ -249,7 +250,7 @@ fn link_destination(href: &str) -> String {
     }
 }
 
-/// Contenu d'un élément de liste : enfants séparés par une ligne vide, sauf liste ou code imbriqué.
+/// List item content: children separated by a blank line, except nested lists or code blocks.
 fn item_content(item: &Node, compat: bool) -> String {
     let mut out = String::new();
     for (index, child) in item.content.iter().enumerate() {
@@ -312,7 +313,7 @@ fn list(node: &Node, compat: bool) -> String {
     lines.join("\n")
 }
 
-// --- Texte en ligne ---------------------------------------------------------------------------
+// --- Inline text ------------------------------------------------------------------------------
 
 fn is_entity_at(chars: &[char], at: usize) -> bool {
     let rest: String = chars[at + 1..].iter().take(32).collect();
@@ -330,7 +331,7 @@ fn is_entity_at(chars: &[char], at: usize) -> bool {
         && body.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
-/// Début de ligne qui deviendrait un marqueur de bloc : renvoie l'index du caractère à échapper.
+/// Line start that would become a block marker: returns the index of the character to escape.
 fn block_marker_at(line: &[char], last: bool) -> Option<usize> {
     let end_or_space = |at: usize| {
         line.get(at).is_none_or(|c| *c == ' ' || *c == '\t') && (line.get(at).is_some() || last)
@@ -359,8 +360,8 @@ fn block_marker_at(line: &[char], last: bool) -> Option<usize> {
     }
 }
 
-/// Échappe un texte hors code. `bol` indique si le texte commence une ligne ; `last` si c'est la fin
-/// du bloc.
+/// Escapes non-code text. `bol` tells whether the text starts a line; `last` whether it ends the
+/// block.
 fn escape_text(text: &str, compat: bool, bol: bool, last: bool) -> String {
     let chars: Vec<char> = text.chars().collect();
     let mut out = String::with_capacity(text.len() + 8);
@@ -410,7 +411,7 @@ fn escape_text(text: &str, compat: bool, bol: bool, last: bool) -> String {
     out
 }
 
-/// Marque rendue : clé d'identité, rang d'imbrication et délimiteurs.
+/// Rendered mark: identity key, nesting rank and delimiters.
 struct Active {
     key: String,
     kind: MarkKind,
@@ -501,7 +502,7 @@ fn delimiters(mark: &Mark, compat: bool, html: bool, code_text: &str) -> (String
     }
 }
 
-/// Ferme les marques actives à partir de `from` ; les espaces de fin restent hors des délimiteurs.
+/// Closes the active marks from `from` on; trailing whitespace stays outside the delimiters.
 fn close_from(out: &mut String, active: &mut Vec<Active>, from: usize) {
     if active.len() <= from {
         return;
@@ -520,7 +521,7 @@ fn close_from(out: &mut String, active: &mut Vec<Active>, from: usize) {
     out.push_str(&trailing);
 }
 
-/// Rend une suite de nœuds en ligne ; l'algorithme de marques reste d'un seul tenant pour rester lisible.
+/// Renders a sequence of inline nodes; the mark algorithm is kept in one piece for readability.
 #[allow(clippy::too_many_lines)]
 fn inline(nodes: &[Node], compat: bool) -> String {
     let supported = |node: &Node| -> Vec<Mark> {

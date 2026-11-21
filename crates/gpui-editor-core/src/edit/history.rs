@@ -3,7 +3,7 @@
 use super::{Editor, HISTORY_LIMIT, Snapshot};
 
 impl Editor {
-    // --- Historique ---
+    // --- History ---
 
     pub(super) fn checkpoint(&mut self) {
         self.undo.push_back(Snapshot {

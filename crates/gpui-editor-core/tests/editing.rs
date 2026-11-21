@@ -411,12 +411,12 @@ fn unknown_blocks_are_preserved_and_skipped() {
     assert_eq!(
         texts(&e),
         ["a", "b"],
-        "Retour arrière ne fusionne pas par-dessus un bloc inconnu"
+        "Backspace does not join across an unknown block"
     );
     assert!(e.doc().to_json_string().contains("databaseView"));
     e.set_selection(caret(0, 1));
     e.delete_forward();
-    assert_eq!(texts(&e), ["a", "b"], "Suppr non plus");
+    assert_eq!(texts(&e), ["a", "b"], "neither does Delete");
     assert!(e.doc().to_json_string().contains("databaseView"));
     let mut e2 = Editor::new(doc(&blocks));
     e2.set_selection(caret(0, 1));
@@ -526,7 +526,7 @@ fn a_link_is_found_from_inside_or_next_to_it_and_selected_whole() {
             offset: 14
         })
         .is_some(),
-        "juste après le lien"
+        "right after the link"
     );
     assert!(
         e.link_at(Pos {
@@ -548,6 +548,6 @@ fn a_link_is_found_from_inside_or_next_to_it_and_selected_whole() {
             offset: 5
         })
         .is_none(),
-        "le lien est retiré en entier"
+        "the whole link is removed"
     );
 }

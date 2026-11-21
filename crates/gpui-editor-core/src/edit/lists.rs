@@ -10,7 +10,7 @@ use super::{
 };
 
 impl Editor {
-    // --- Listes ---
+    // --- Lists ---
 
     pub(super) fn list_context(&self, block: usize) -> Option<(Path, usize)> {
         let path = self.path_of(block);
@@ -22,7 +22,7 @@ impl Editor {
         Some((list, parent[parent.len() - 1]))
     }
 
-    /// Met le bloc courant dans une liste du type donné, change le type de sa liste, ou en sort.
+    /// Wraps the current block in a list of the given type, changes its list type, or lifts it out.
     pub fn toggle_list(&mut self, kind: Kind) {
         self.checkpoint();
         self.toggle_list_raw(kind);
@@ -88,7 +88,7 @@ impl Editor {
         });
     }
 
-    /// Coche ou décoche la tâche du bloc courant.
+    /// Checks or unchecks the task of the current block.
     pub fn toggle_task_checked(&mut self) {
         let block = self.selection.head.block;
         let path = self.path_of(block);
@@ -106,7 +106,7 @@ impl Editor {
         item.attrs.insert("checked".into(), Value::Bool(!checked));
     }
 
-    /// Imbrique l'élément courant dans l'élément précédent.
+    /// Nests the current item inside the previous one.
     pub fn indent(&mut self) {
         let block = self.selection.head.block;
         let Some((list_path, item_index)) = self.list_context(block) else {
@@ -136,7 +136,7 @@ impl Editor {
         self.reselect(block);
     }
 
-    /// Sort l'élément courant d'une liste imbriquée, juste après son parent.
+    /// Moves the current item out of a nested list, right after its parent.
     pub fn outdent(&mut self) {
         let block = self.selection.head.block;
         let Some((list_path, item_index)) = self.list_context(block) else {

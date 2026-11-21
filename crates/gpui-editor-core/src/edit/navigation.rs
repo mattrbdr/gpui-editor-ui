@@ -8,9 +8,9 @@ use super::{
 };
 
 impl Editor {
-    // --- Lecture de la sélection ---
+    // --- Reading the selection ---
 
-    /// Texte sélectionné ; un saut de ligne sépare les blocs.
+    /// Selected text; blocks are separated by a line break.
     #[must_use]
     pub fn selected_text(&self) -> String {
         let (start, end) = (self.selection.start(), self.selection.end());
@@ -34,7 +34,7 @@ impl Editor {
         parts.join("\n")
     }
 
-    /// La marque est-elle active sur toute la sélection (ou au curseur) ?
+    /// Whether the mark is active over the whole selection (or at the caret).
     #[must_use]
     pub fn is_mark_active(&self, kind: &MarkKind) -> bool {
         if self.selection.is_collapsed() {
@@ -92,7 +92,7 @@ impl Editor {
             .collect()
     }
 
-    // --- Déplacements ---
+    // --- Movement ---
 
     pub(super) fn go(&mut self, pos: Pos, extend: bool) {
         self.selection.head = pos;
@@ -103,7 +103,7 @@ impl Editor {
         self.typing = None;
     }
 
-    /// Place le curseur (ou étend la sélection) à `pos`.
+    /// Moves the caret (or extends the selection) to `pos`.
     pub fn move_to(&mut self, pos: Pos, extend: bool) {
         let pos = self.clamp(pos);
         self.go(pos, extend);

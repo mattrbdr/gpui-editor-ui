@@ -84,7 +84,7 @@ impl Editor {
         true
     }
 
-    /// Place le bloc courant dans une liste du type donné (sans la retirer s'il y est déjà).
+    /// Wraps the current block in a list of the given type (leaving it as is if already there).
     pub(super) fn ensure_list(&mut self, kind: Kind) {
         let block = self.selection.head.block;
         let already = self
@@ -107,7 +107,7 @@ impl Editor {
         container.content.insert(*index, quote);
     }
 
-    /// Cite ou retire la citation du bloc courant.
+    /// Wraps the current block in a blockquote, or unwraps it.
     pub fn toggle_blockquote(&mut self) {
         self.checkpoint();
         let block = self.selection.head.block;
@@ -125,8 +125,8 @@ impl Editor {
         }
     }
 
-    /// Ferme un délimiteur en ligne (`**`, `*`, `_`, `` ` ``, `~~`) : applique la marque au texte
-    /// qu'il entoure et retire les délimiteurs.
+    /// Closes an inline delimiter (`**`, `*`, `_`, `` ` ``, `~~`): applies the mark to the enclosed
+    /// text and removes the delimiters.
     pub(super) fn inline_rule(&mut self, typed: char) -> bool {
         let head = self.selection.head;
         if !self.selection.is_collapsed() || self.block_kind(head.block) == Kind::CodeBlock {
@@ -183,7 +183,7 @@ impl Editor {
         false
     }
 
-    /// Entrée sur une ligne vide en fin de bloc de code : retire cette ligne et sort du bloc.
+    /// Enter on an empty line at the end of a code block: removes that line and leaves the block.
     pub(super) fn leave_code_block(&mut self) -> bool {
         let head = self.selection.head;
         if self.block_kind(head.block) != Kind::CodeBlock {
@@ -214,7 +214,7 @@ impl Editor {
         true
     }
 
-    /// Entrée sur ```` ```langue ```` : bloc de code ; sur `---` : règle horizontale.
+    /// Enter on ```` ```lang ````: code block; on `---`: horizontal rule.
     pub(super) fn enter_rule(&mut self) -> bool {
         let head = self.selection.head;
         if self.block_kind(head.block) != Kind::Paragraph {

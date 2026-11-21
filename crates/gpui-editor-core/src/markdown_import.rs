@@ -1,7 +1,7 @@
-//! Import Markdown (CommonMark + GFM barré et tâches) vers le modèle de document.
+//! Markdown import (CommonMark + GFM strikethrough and task lists) into the document model.
 //!
-//! La structure produite est celle de `@tiptap/markdown` : marques écrites de l'intérieur vers
-//! l'extérieur, `text` avant `marks`, `title: null` sur les liens, image seule promue en bloc.
+//! The resulting structure matches `@tiptap/markdown`: marks written from the innermost to the
+//! outermost, `text` before `marks`, `title: null` on links, a lone image promoted to a block.
 
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use serde_json::{Map, Value};
@@ -9,19 +9,19 @@ use serde_json::{Map, Value};
 use crate::{Flavor, Kind, Mark, MarkKind, MarkdownOptions, Node, model::Key};
 
 impl Node {
-    /// Document à partir de Markdown CommonMark.
+    /// Document from CommonMark Markdown.
     #[must_use]
     pub fn from_markdown(source: &str) -> Self {
         Self::from_markdown_with(source, &MarkdownOptions::default())
     }
 
-    /// Comme [`Node::from_markdown`] ; la saveur `TipTapCompat` lit aussi `++souligné++`.
+    /// Like [`Node::from_markdown`]; the `TipTapCompat` flavor also reads `++underlined++`.
     #[must_use]
     pub fn from_markdown_with(source: &str, options: &MarkdownOptions) -> Self {
         let compat = options.flavor == Flavor::TipTapCompat;
         let mut flags = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
         if compat {
-            // Sans extension « tableau », @tiptap/markdown écarte les tableaux.
+            // Without a table extension, @tiptap/markdown drops tables.
             flags |= Options::ENABLE_TABLES;
         }
         let mut builder = Builder::new();
@@ -116,7 +116,7 @@ impl Builder {
     fn top(&mut self) -> &mut Node {
         self.stack
             .last_mut()
-            .expect("la pile contient toujours le document")
+            .expect("the stack always contains the document")
     }
 
     fn push(&mut self, new: Node) {
@@ -124,7 +124,7 @@ impl Builder {
         self.stack.push(new);
     }
 
-    /// Ferme le nœud courant et l'ajoute à son parent.
+    /// Closes the current node and appends it to its parent.
     fn pop(&mut self) {
         if self.stack.len() > 1
             && let Some(done) = self.stack.pop()
@@ -145,7 +145,7 @@ impl Builder {
         }
     }
 
-    /// Les éléments de liste « serrés » portent du texte sans paragraphe : on en ouvre un.
+    /// "Tight" list items hold text without a paragraph, so open one.
     fn ensure_inline_container(&mut self) {
         if self
             .stack
@@ -354,7 +354,7 @@ impl Builder {
         }
     }
 
-    /// Un paragraphe qui ne contient qu'une image devient un bloc image (comme TipTap).
+    /// A paragraph containing only an image becomes an image block (like TipTap).
     fn promote_lone_image(&mut self) {
         let top = self.top();
         if top.kind == Kind::Paragraph
@@ -367,7 +367,7 @@ impl Builder {
     }
 }
 
-/// Une liste mêlant puces et tâches devient une suite de listes homogènes (comme TipTap).
+/// A list mixing bullets and tasks becomes a sequence of homogeneous lists (like TipTap).
 fn split_mixed_lists(node: &mut Node) {
     let children = std::mem::take(&mut node.content);
     let mut out: Vec<Node> = Vec::with_capacity(children.len());
@@ -401,7 +401,7 @@ fn node_of(kind: Kind) -> Node {
     Node::new(kind)
 }
 
-/// Lit `++texte++` dans les nœuds texte (saveur compatible TipTap).
+/// Reads `++text++` in text nodes (TipTap-compatible flavor).
 fn underline_pass(node: &mut Node) {
     let children = std::mem::take(&mut node.content);
     let mut out = Vec::with_capacity(children.len());

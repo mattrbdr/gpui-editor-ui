@@ -30,13 +30,13 @@ fn the_compat_flavor_matches_tiptap_on_every_fixture() {
         let actual = compat(&node);
         if actual != expected {
             failures.push(format!(
-                "{name}\n   attendu : {expected:?}\n   obtenu  : {actual:?}"
+                "{name}\n   expected: {expected:?}\n   actual:   {actual:?}"
             ));
         }
     }
     assert!(
         failures.is_empty(),
-        "{} écart(s) :\n{}",
+        "{} mismatch(es):\n{}",
         failures.len(),
         failures.join("\n")
     );

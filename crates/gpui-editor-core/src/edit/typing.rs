@@ -11,9 +11,9 @@ use super::{
 };
 
 impl Editor {
-    // --- Suppression ---
+    // --- Deletion ---
 
-    /// Supprime l'intervalle `[start, end)` et renvoie la position de fusion.
+    /// Deletes the `[start, end)` range and returns the position where the blocks were joined.
     pub(super) fn delete_range(&mut self, start: Pos, end: Pos) -> Pos {
         if start == end {
             return start;
@@ -67,7 +67,8 @@ impl Editor {
         self.selection = Selection::caret(pos);
     }
 
-    /// Un bloc inconnu (vue de base de données, image…) se trouve entre les blocs de texte `first` et `last`.
+    /// Whether an unknown block (database view, image…) lies between text blocks `first` and
+    /// `last`.
     pub(super) fn unknown_block_between(&self, first: usize, last: usize) -> bool {
         let textblocks = self.textblocks();
         let order = blocks_in_order(&self.doc);
@@ -85,7 +86,7 @@ impl Editor {
     }
 
     pub fn delete_backward(&mut self) {
-        // Fusionner par-dessus un bloc inconnu le supprimerait sans que l'utilisateur le voie : on ne fait rien.
+        // Joining across an unknown block would delete it without the user seeing it: do nothing.
         let head = self.selection.head;
         if self.selection.is_collapsed()
             && head.offset == 0
@@ -159,9 +160,9 @@ impl Editor {
         }
     }
 
-    // --- Saisie ---
+    // --- Typing ---
 
-    /// Insère du texte (remplace la sélection). Un saut de ligne coupe le bloc, sauf dans du code.
+    /// Inserts text (replacing the selection). A line break splits the block, except in code.
     pub fn insert_text(&mut self, text: &str) {
         if text.is_empty() {
             return;
@@ -198,7 +199,7 @@ impl Editor {
         self.stored_marks = None;
     }
 
-    /// Identifiant de la mention touchée par une position (le caractère avant ou après), s'il y en a.
+    /// Id of the mention at a position (the character before or after), if any.
     #[must_use]
     pub fn mention_near(&self, pos: Pos) -> Option<String> {
         let pos = self.clamp(pos);
@@ -215,8 +216,8 @@ impl Editor {
             })
     }
 
-    /// Remplace `[start, end)` (par exemple `[[requête`) par une mention de `label` pointant vers
-    /// `id`, en un seul pas d'historique ; le curseur se place juste après.
+    /// Replaces `[start, end)` (for example `[[query`) with a `label` mention pointing to `id`, as
+    /// a single history step; the caret is placed right after it.
     pub fn insert_mention(&mut self, start: Pos, end: Pos, id: &str, label: &str) {
         self.checkpoint();
         let (start, end) = (self.clamp(start.min(end)), self.clamp(start.max(end)));
@@ -252,14 +253,14 @@ impl Editor {
         self.typing = None;
     }
 
-    /// Ouvre un lot : un seul pas d'historique pour les `replace_range` non enregistrés qui suivent
-    /// (composition IME).
+    /// Opens a batch: a single history step for the unrecorded `replace_range` calls that follow
+    /// (IME composition).
     pub fn begin_batch(&mut self) {
         self.checkpoint();
     }
 
-    /// Remplace `[start, end)` par `text` et place le curseur après. `record` ajoute un pas
-    /// d'historique ; sinon l'édition rejoint le lot ouvert par [`Editor::begin_batch`].
+    /// Replaces `[start, end)` with `text` and places the caret after it. `record` adds a history
+    /// step; otherwise the edit joins the batch opened by [`Editor::begin_batch`].
     pub fn replace_range(&mut self, start: Pos, end: Pos, text: &str, record: bool) {
         if record {
             self.checkpoint();
@@ -280,8 +281,8 @@ impl Editor {
         self.typing = None;
     }
 
-    /// Retire `[start, end)` (le texte de commande tapé) puis convertit le bloc, en un seul pas
-    /// d'historique.
+    /// Removes `[start, end)` (the typed command text) and then converts the block, as a single
+    /// history step.
     pub fn replace_range_with_block(&mut self, start: Pos, end: Pos, command: BlockCommand) {
         self.checkpoint();
         let (start, end) = (self.clamp(start.min(end)), self.clamp(start.max(end)));
@@ -309,7 +310,7 @@ impl Editor {
         }
     }
 
-    /// Insère une règle horizontale (remplace le bloc s'il est vide) suivie d'un paragraphe.
+    /// Inserts a horizontal rule (replacing the block if it is empty) followed by a paragraph.
     pub(super) fn insert_rule_after(&mut self, block: usize) {
         let path = self.path_of(block);
         let empty = self.block_len(block) == 0;
@@ -340,7 +341,7 @@ impl Editor {
         });
     }
 
-    /// Sélectionne le mot qui contient `pos` (sans effet hors d'un mot).
+    /// Selects the word containing `pos` (no effect outside a word).
     pub fn select_word_at(&mut self, pos: Pos) {
         let pos = self.clamp(pos);
         let spans = word_spans(&self.block_text(pos.block));
@@ -364,7 +365,7 @@ impl Editor {
         self.typing = None;
     }
 
-    /// Sélectionne tout le texte d'un bloc.
+    /// Selects all the text of a block.
     pub fn select_block(&mut self, block: usize) {
         let block = block.min(self.block_count() - 1);
         self.selection = Selection {
@@ -429,7 +430,7 @@ impl Editor {
         });
     }
 
-    /// Touche Entrée.
+    /// Enter key.
     pub fn split_block(&mut self) {
         self.checkpoint();
         if !self.selection.is_collapsed() {
@@ -508,7 +509,7 @@ impl Editor {
         self.selection = Selection::caret(Pos { block, offset: 0 });
     }
 
-    /// Sort d'une liste depuis un élément vide : l'élément devient un paragraphe hors de la liste.
+    /// Leaves a list from an empty item: the item becomes a paragraph outside the list.
     pub(super) fn exit_list(&mut self, block_path: &[usize]) {
         let item_path = &block_path[..block_path.len() - 1];
         let list_path = &item_path[..item_path.len() - 1];

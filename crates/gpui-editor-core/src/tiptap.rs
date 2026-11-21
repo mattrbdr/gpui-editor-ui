@@ -1,4 +1,4 @@
-//! Lecture et écriture du JSON ProseMirror/TipTap.
+//! Reading and writing ProseMirror/TipTap JSON.
 
 use serde_json::{Map, Value};
 
@@ -17,7 +17,7 @@ fn name_of(map: &Map<String, Value>) -> Result<&str, Error> {
         .ok_or(Error::MissingType)
 }
 
-/// Ordre des clés connues de la source, `None` s'il est déjà canonique.
+/// Order of the known keys in the source, `None` if it is already canonical.
 fn order_of(map: &Map<String, Value>) -> Option<Vec<Key>> {
     let found: Vec<Key> = map.keys().filter_map(|name| Key::from_name(name)).collect();
     let canonical: Vec<Key> = Key::CANONICAL
@@ -49,7 +49,7 @@ fn mark_from(value: &Value) -> Result<Mark, Error> {
     })
 }
 
-/// Clés à écrire, dans l'ordre de la source puis dans l'ordre canonique pour les clés ajoutées.
+/// Keys to write, in source order, followed by any added keys in canonical order.
 fn keys_to_write(shape: &Shape, present: impl Fn(Key) -> bool) -> Vec<Key> {
     let mut keys: Vec<Key> = shape
         .order
@@ -98,11 +98,12 @@ fn list_of<T>(
 }
 
 impl Node {
-    /// Lit un nœud depuis une valeur JSON.
+    /// Reads a node from a JSON value.
     ///
     /// # Errors
     ///
-    /// [`Error::NotAnObject`], [`Error::MissingType`] ou [`Error::MissingText`] selon le défaut.
+    /// [`Error::NotAnObject`], [`Error::MissingType`] or [`Error::MissingText`], depending on the
+    /// problem.
     pub fn from_json(value: &Value) -> Result<Self, Error> {
         let map = object(value)?;
         let kind = Kind::from_name(name_of(map)?);
@@ -128,17 +129,17 @@ impl Node {
         })
     }
 
-    /// Lit un nœud depuis du texte JSON.
+    /// Reads a node from JSON text.
     ///
     /// # Errors
     ///
-    /// [`Error::Json`] si le texte n'est pas du JSON, sinon les erreurs de [`Node::from_json`].
+    /// [`Error::Json`] if the text is not JSON, otherwise the errors of [`Node::from_json`].
     pub fn from_json_str(source: &str) -> Result<Self, Error> {
         Self::from_json(&serde_json::from_str(source)?)
     }
 
-    /// Valeur JSON. L'ordre des clés de la source est conservé ; les clés ajoutées ensuite suivent
-    /// l'ordre canonique de `ProseMirror` (`type`, `attrs`, `content`, `marks`, `text`).
+    /// JSON value. The key order of the source is preserved; keys added later follow the canonical
+    /// `ProseMirror` order (`type`, `attrs`, `content`, `marks`, `text`).
     #[must_use]
     pub fn to_json(&self) -> Value {
         let present = |key| match key {
@@ -162,7 +163,7 @@ impl Node {
         Value::Object(map)
     }
 
-    /// Texte JSON compact, comme `JSON.stringify`.
+    /// Compact JSON text, like `JSON.stringify`.
     #[must_use]
     pub fn to_json_string(&self) -> String {
         self.to_json().to_string()

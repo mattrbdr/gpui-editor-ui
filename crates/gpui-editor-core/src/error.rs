@@ -1,25 +1,25 @@
 use std::fmt;
 
-/// Échec de lecture d'un document JSON.
+/// Failure to parse a JSON document.
 #[derive(Debug)]
 pub enum Error {
-    /// Le texte n'est pas du JSON valide.
+    /// The text is not valid JSON.
     Json(serde_json::Error),
-    /// Un nœud ou une marque n'est pas un objet JSON.
+    /// A node or mark is not a JSON object.
     NotAnObject,
-    /// La clé `type` est absente ou n'est pas une chaîne.
+    /// The `type` key is missing or is not a string.
     MissingType,
-    /// Un nœud `text` n'a pas de clé `text` de type chaîne.
+    /// A `text` node has no string `text` key.
     MissingText,
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Json(error) => write!(f, "JSON invalide : {error}"),
-            Self::NotAnObject => f.write_str("un nœud ou une marque doit être un objet JSON"),
-            Self::MissingType => f.write_str("la clé `type` est absente ou n'est pas une chaîne"),
-            Self::MissingText => f.write_str("un nœud `text` doit porter une chaîne `text`"),
+            Self::Json(error) => write!(f, "invalid JSON: {error}"),
+            Self::NotAnObject => f.write_str("a node or mark must be a JSON object"),
+            Self::MissingType => f.write_str("the `type` key is missing or is not a string"),
+            Self::MissingText => f.write_str("a `text` node must have a string `text`"),
         }
     }
 }

@@ -33,7 +33,7 @@ pub(super) fn node_at_mut<'a>(root: &'a mut Node, path: &[usize]) -> &'a mut Nod
     node
 }
 
-/// Blocs dans l'ordre du document : `(chemin, est_un_bloc_de_texte)`.
+/// Blocks in document order: `(path, is_text_block)`.
 pub(super) fn blocks_in_order(root: &Node) -> Vec<(Path, bool)> {
     fn walk(node: &Node, path: &mut Path, out: &mut Vec<(Path, bool)>) {
         for (index, child) in node.content.iter().enumerate() {
@@ -53,7 +53,7 @@ pub(super) fn blocks_in_order(root: &Node) -> Vec<(Path, bool)> {
     out
 }
 
-/// Retire un nœud et les conteneurs qui deviennent vides.
+/// Removes a node and any containers left empty.
 pub(super) fn remove_at(root: &mut Node, path: &[usize]) {
     let Some((last, parent)) = path.split_last() else {
         return;

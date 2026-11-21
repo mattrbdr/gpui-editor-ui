@@ -7,9 +7,9 @@ use crate::{Kind, Mark, MarkKind};
 use super::{Editor, Pos, Selection, atoms::rebuild, tree::node_at_mut};
 
 impl Editor {
-    // --- Blocs et marques ---
+    // --- Blocks and marks ---
 
-    /// Change le type des blocs de la sélection.
+    /// Changes the type of a selected block.
     pub(super) fn convert_block(&mut self, block: usize, kind: Kind, attrs: Map<String, Value>) {
         let mut atoms = self.atoms(block);
         let was_code = self.block_kind(block) == Kind::CodeBlock;
@@ -49,7 +49,7 @@ impl Editor {
         attrs
     }
 
-    /// Titre de niveau `level`, ou paragraphe si les blocs en sont déjà.
+    /// Turns the blocks into a `level` heading, or back into paragraphs if they already are.
     pub fn toggle_heading(&mut self, level: u64) {
         self.checkpoint();
         let all = self.selected_blocks().all(|b| {
@@ -107,8 +107,8 @@ impl Editor {
         });
     }
 
-    /// Lien touché par `pos` : début, fin et adresse. Le lien s'étend sur tous les caractères voisins
-    /// qui portent la même adresse.
+    /// Link at `pos`: start, end and URL. The link spans all adjacent characters that carry the
+    /// same URL.
     #[must_use]
     pub fn link_at(&self, pos: Pos) -> Option<(Pos, Pos, String)> {
         let pos = self.clamp(pos);
@@ -149,7 +149,7 @@ impl Editor {
         ))
     }
 
-    /// Sélectionne le lien touché par le curseur et retourne son adresse.
+    /// Selects the link under the caret and returns its URL.
     pub fn select_link_at_caret(&mut self) -> Option<String> {
         let (start, end, href) = self.link_at(self.selection.head)?;
         self.selection = Selection {
@@ -159,7 +159,7 @@ impl Editor {
         Some(href)
     }
 
-    /// Pose (`Some`) ou retire (`None`) un lien sur la sélection.
+    /// Sets (`Some`) or removes (`None`) a link on the selection.
     pub fn set_link(&mut self, href: Option<&str>) {
         let href = href.map(str::to_owned);
         self.edit_marks(move |marks| {

@@ -10,11 +10,11 @@ pub(super) struct Atom {
     pub(super) ch: char,
     pub(super) marks: Vec<Mark>,
     pub(super) hard_break: bool,
-    /// Nœud en ligne inconnu conservé tel quel (un seul caractère de substitution).
+    /// Unknown inline node kept as is (a single replacement character).
     pub(super) node: Option<Node>,
 }
 
-/// Nom de la marque interne qui porte les attributs d'une mention le temps de l'édition.
+/// Name of the internal mark that carries a mention's attributes while it is being edited.
 pub(super) const MENTION: &str = "mention";
 
 pub(super) fn mention_text(attrs: &Map<String, Value>) -> String {
@@ -26,7 +26,7 @@ pub(super) fn mention_text(attrs: &Map<String, Value>) -> String {
                 .and_then(Value::as_str)
                 .filter(|v| !v.is_empty())
         })
-        .unwrap_or("Lien");
+        .unwrap_or("Link");
     format!("[[{label}]]")
 }
 
@@ -36,7 +36,7 @@ pub(super) fn mention_mark(atom: &Atom) -> Option<&Mark> {
         .find(|m| m.kind == MarkKind::Other(MENTION.to_owned()))
 }
 
-/// Atomes d'une mention : le texte `[[titre]]`, chaque caractère portant la marque interne.
+/// Atoms of a mention: the `[[title]]` text, each character carrying the internal mark.
 pub(super) fn mention_atoms(attrs: &Map<String, Value>, extra: &[Mark]) -> Vec<Atom> {
     let mut mark = Mark::new(MarkKind::Other(MENTION.to_owned()));
     mark.attrs.clone_from(attrs);
@@ -139,7 +139,7 @@ pub(super) fn rebuild(block: &mut Node, atoms: &[Atom]) {
                 index += expected.len();
                 continue;
             }
-            // Mention modifiée à la main : elle redevient du texte ordinaire.
+            // Mention edited by hand: it turns back into plain text.
             marks.retain(|m| m.kind != mark.kind);
         }
         match &mut run {
@@ -162,7 +162,7 @@ pub(super) fn flat_text(atoms: &[Atom]) -> String {
     atoms.iter().map(|atom| atom.ch).collect()
 }
 
-/// Limites de graphèmes, en décalages de caractères (0 et la longueur inclus).
+/// Grapheme boundaries, as character offsets (including 0 and the length).
 pub(super) fn grapheme_bounds(text: &str) -> Vec<usize> {
     let mut bounds = vec![0];
     let mut chars = 0;
@@ -189,7 +189,7 @@ pub(super) fn next_bound(text: &str, offset: usize) -> usize {
         .unwrap_or(len)
 }
 
-/// Début et fin des mots, en décalages de caractères.
+/// Start and end of each word, as character offsets.
 pub(super) fn word_spans(text: &str) -> Vec<(usize, usize)> {
     text.unicode_word_indices()
         .map(|(byte, word)| {
@@ -199,7 +199,7 @@ pub(super) fn word_spans(text: &str) -> Vec<(usize, usize)> {
         .collect()
 }
 
-/// Début du délimiteur ouvrant qui correspond au délimiteur fermant en fin de `chars`.
+/// Start of the opening delimiter matching the closing delimiter at the end of `chars`.
 pub(super) fn find_opening(chars: &[char], delimiter: &[char]) -> Option<usize> {
     let n = delimiter.len();
     let end = chars.len();

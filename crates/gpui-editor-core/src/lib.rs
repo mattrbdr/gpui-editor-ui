@@ -1,12 +1,12 @@
-//! Modèle de document à blocs, sans dépendance à une interface graphique.
+//! Block-based document model, with no dependency on a GUI toolkit.
 //!
-//! Le modèle reprend la forme de ProseMirror/TipTap (`type`, `attrs`, `content`, `marks`, `text`)
-//! pour qu'un document JSON existant fasse l'aller-retour sans perte : les nœuds et marques
-//! inconnus sont conservés tels quels ([`Kind::Other`], [`MarkKind::Other`]).
+//! The model mirrors the ProseMirror/TipTap shape (`type`, `attrs`, `content`, `marks`, `text`)
+//! so that an existing JSON document round-trips losslessly: unknown nodes and marks are kept
+//! as is ([`Kind::Other`], [`MarkKind::Other`]).
 //!
-//! Limites connues : seules les clés `type`, `attrs`, `content`, `marks` et `text` sont lues ; une
-//! autre clé est ignorée à la lecture. Un `attrs` ou un `content` vide écrit explicitement dans la
-//! source est restitué tel quel.
+//! Known limitations: only the `type`, `attrs`, `content`, `marks` and `text` keys are read; any
+//! other key is ignored when parsing. An empty `attrs` or `content` written explicitly in the
+//! source is preserved as is.
 
 mod edit;
 mod error;
