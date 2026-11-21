@@ -711,3 +711,51 @@ fn ctrl_k_asks_for_a_link_and_apply_link_sets_it(cx: &mut TestAppContext) {
         Some("https://exemple.fr")
     );
 }
+
+#[gpui::test]
+fn image_blocks_go_through_the_image_resolver(cx: &mut TestAppContext) {
+    use std::{cell::RefCell, rc::Rc};
+    let node = Node::from_json_str(
+        r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"a"},{"type":"image","attrs":{"src":"inline.png","alt":"inline"}}]},{"type":"image","attrs":{"src":"block.png","alt":"A block"}},{"type":"image","attrs":{"src":"none.png","alt":"none"}}]}"#,
+    )
+    .unwrap();
+    let before = node.to_json_string();
+    let window = open(cx, node);
+    let asked = Rc::new(RefCell::new(Vec::new()));
+    let seen = asked.clone();
+    window
+        .update(cx, |view, _, cx| {
+            view.set_image_resolver(
+                move |src| {
+                    seen.borrow_mut().push(src.to_owned());
+                    (src == "block.png").then(|| gpui::ImageSource::from("/tmp/block.png"))
+                },
+                cx,
+            );
+        })
+        .unwrap();
+    cx.run_until_parked();
+    let asked = asked.borrow();
+    assert!(asked.iter().any(|src| src == "block.png"), "{asked:?}");
+    assert!(asked.iter().any(|src| src == "none.png"), "{asked:?}");
+    assert!(
+        !asked.iter().any(|src| src == "inline.png"),
+        "inline images stay markers: {asked:?}"
+    );
+    let after = window
+        .read_with(cx, |view, _| view.doc().to_json_string())
+        .unwrap();
+    assert_eq!(
+        after, before,
+        "rendering an image never changes the document"
+    );
+}
+
+#[test]
+fn the_dark_theme_is_dark_and_keeps_the_default_fonts() {
+    let (light, dark) = (EditorTheme::default(), EditorTheme::dark());
+    assert!(dark.background.l < 0.2 && light.background.l > 0.8);
+    assert!(dark.text.l > 0.8);
+    assert_eq!(dark.font_family, light.font_family);
+    assert_eq!(dark.font_size, light.font_size);
+}

@@ -6,11 +6,12 @@ mod ime;
 mod menus;
 mod mouse;
 
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
-    App, ClipboardItem, Context, EventEmitter, FocusHandle, Focusable, Hsla, Pixels, ScrollHandle,
-    SharedString, Task, TextLayout, Window, hsla, point, px,
+    App, ClipboardItem, Context, EventEmitter, FocusHandle, Focusable, Hsla, ImageSource, Pixels,
+    ScrollHandle, SharedString, Task, TextLayout, Window, hsla, point, px,
 };
 use gpui_editor_core::{BlockCommand, Editor, Node};
 #[cfg(feature = "test-support")]
@@ -50,6 +51,35 @@ impl Default for EditorTheme {
             border: hsla(0.0, 0.0, 0.0, 0.2),
         }
     }
+}
+
+impl EditorTheme {
+    /// Dark variant of the default theme: light text on a dark gray background, with contrasts of
+    /// at least 4.5:1 for the text, links and muted text.
+    #[must_use]
+    pub fn dark() -> Self {
+        Self {
+            background: hsla(0.0, 0.0, 0.11, 1.0),
+            text: hsla(0.0, 0.0, 0.9, 1.0),
+            muted: hsla(0.0, 0.0, 0.62, 1.0),
+            caret: hsla(0.6, 0.9, 0.68, 1.0),
+            selection: hsla(0.6, 0.9, 0.6, 0.35),
+            link: hsla(0.58, 0.9, 0.72, 1.0),
+            code_background: hsla(0.0, 0.0, 1.0, 0.08),
+            border: hsla(0.0, 0.0, 1.0, 0.22),
+            ..Self::default()
+        }
+    }
+}
+
+/// Resolves the `src` attribute of an image block into something GPUI can load.
+pub type ImageResolver = Rc<dyn Fn(&str) -> Option<ImageSource>>;
+
+/// Default image resolution: `file://` URLs and absolute paths; anything else stays a marker.
+fn default_image_source(src: &str) -> Option<ImageSource> {
+    let path = src.strip_prefix("file://").unwrap_or(src);
+    let path = std::path::Path::new(path);
+    path.is_absolute().then(|| ImageSource::from(path))
 }
 
 /// Event emitted by the editor.
@@ -162,6 +192,8 @@ pub struct EditorView {
     mention_query: String,
     /// Previews of unknown blocks, keyed by the value of their `viewId` attribute.
     pub(crate) embeds: std::collections::HashMap<String, EmbedCard>,
+    /// Resolution of image sources, see [`EditorView::set_image_resolver`].
+    pub(crate) image_resolver: Option<ImageResolver>,
     /// Code block whose "Copy" button was just used.
     pub(crate) copied: Option<usize>,
     /// Vertical scrolling of the document.
@@ -240,6 +272,7 @@ impl EditorView {
             mention_items: Vec::new(),
             mention_query: String::new(),
             embeds: std::collections::HashMap::new(),
+            image_resolver: None,
             copied: None,
             scroll: ScrollHandle::new(),
             reveal_caret: false,
@@ -330,6 +363,26 @@ impl EditorView {
     pub fn set_theme(&mut self, theme: EditorTheme, cx: &mut Context<Self>) {
         self.theme = theme;
         cx.notify();
+    }
+
+    /// Sets how the `src` of an image block is loaded: return `None` to show the `[image: alt]`
+    /// marker instead. Without a resolver, `file://` URLs and absolute paths are loaded. The
+    /// document itself is never changed. Images inside a paragraph stay markers.
+    pub fn set_image_resolver(
+        &mut self,
+        resolve: impl Fn(&str) -> Option<ImageSource> + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.image_resolver = Some(Rc::new(resolve));
+        cx.notify();
+    }
+
+    /// Image source for the `src` of an image block, see [`EditorView::set_image_resolver`].
+    pub(crate) fn resolve_image(&self, src: &str) -> Option<ImageSource> {
+        match &self.image_resolver {
+            Some(resolve) => resolve(src),
+            None => default_image_source(src),
+        }
     }
 
     /// Gives keyboard focus to the editor.

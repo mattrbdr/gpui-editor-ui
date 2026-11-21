@@ -4,9 +4,9 @@ use std::ops::Range;
 
 use gpui::{
     AnyElement, Context, ElementInputHandler, FontStyle, FontWeight, HighlightStyle, Hsla,
-    MouseButton, ParentElement, PathBuilder, Render, StatefulInteractiveElement,
-    StrikethroughStyle, Styled, StyledText, TextLayout, UnderlineStyle, Window, canvas, deferred,
-    div, fill, point, prelude::*, px,
+    MouseButton, ObjectFit, ParentElement, PathBuilder, Render, StatefulInteractiveElement,
+    StrikethroughStyle, Styled, StyledImage, StyledText, TextLayout, UnderlineStyle, Window,
+    canvas, deferred, div, fill, img, point, prelude::*, px,
 };
 use gpui_editor_core::{Kind, MarkKind, Node};
 
@@ -564,18 +564,45 @@ impl EditorView {
                     .unwrap_or_default();
                 self.embed_card(&self.embeds[key])
             }
-            Kind::Other(name) => {
-                let label = match node.attrs.get("alt").and_then(serde_json::Value::as_str) {
-                    Some(alt) if name == "image" => format!("[image: {alt}]"),
-                    _ => format!("[{name}]"),
-                };
+            Kind::Other(name) => self.unknown_block(name, node),
+        })
+    }
+
+    /// A node the editor does not know: an image (loaded through the image resolver) or a
+    /// `[name]` marker. The node is kept in the document either way.
+    fn unknown_block(&self, name: &str, node: &Node) -> AnyElement {
+        let theme = &self.theme;
+        let label = match node.attrs.get("alt").and_then(serde_json::Value::as_str) {
+            Some(alt) if name == "image" => format!("[image: {alt}]"),
+            _ => format!("[{name}]"),
+        };
+        let marker = {
+            let muted = theme.muted;
+            move || {
                 div()
                     .w_full()
-                    .text_color(theme.muted)
-                    .child(label)
+                    .text_color(muted)
+                    .child(label.clone())
                     .into_any_element()
             }
-        })
+        };
+        let source = (name == "image")
+            .then(|| node.attrs.get("src").and_then(serde_json::Value::as_str))
+            .flatten()
+            .and_then(|src| self.resolve_image(src));
+        match source {
+            Some(source) => div()
+                .w_full()
+                .child(
+                    img(source)
+                        .max_w_full()
+                        .object_fit(ObjectFit::Contain)
+                        .rounded(px(4.0))
+                        .with_fallback(marker),
+                )
+                .into_any_element(),
+            None => marker(),
+        }
     }
 
     fn build_list(

@@ -14,4 +14,4 @@ mod render;
 mod view;
 
 pub use keys::bind_keys;
-pub use view::{EditorEvent, EditorTheme, EditorView, EmbedCard, MentionItem};
+pub use view::{EditorEvent, EditorTheme, EditorView, EmbedCard, ImageResolver, MentionItem};
