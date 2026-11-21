@@ -194,6 +194,10 @@ pub struct EditorView {
     pub(crate) embeds: std::collections::HashMap<String, EmbedCard>,
     /// Resolution of image sources, see [`EditorView::set_image_resolver`].
     pub(crate) image_resolver: Option<ImageResolver>,
+    /// Name of the editor for assistive technology.
+    pub(crate) accessible_label: SharedString,
+    /// Ids of the accessibility text runs of the last frame, one per text block.
+    pub(crate) a11y_runs: Rc<std::cell::RefCell<Vec<gpui::accesskit::NodeId>>>,
     /// Code block whose "Copy" button was just used.
     pub(crate) copied: Option<usize>,
     /// Vertical scrolling of the document.
@@ -273,6 +277,8 @@ impl EditorView {
             mention_query: String::new(),
             embeds: std::collections::HashMap::new(),
             image_resolver: None,
+            accessible_label: "Document editor".into(),
+            a11y_runs: Rc::default(),
             copied: None,
             scroll: ScrollHandle::new(),
             reveal_caret: false,
@@ -382,6 +388,27 @@ impl EditorView {
         match &self.image_resolver {
             Some(resolve) => resolve(src),
             None => default_image_source(src),
+        }
+    }
+
+    /// Sets the name assistive technology announces for the editor (default: "Document editor").
+    pub fn set_accessible_label(&mut self, label: impl Into<SharedString>, cx: &mut Context<Self>) {
+        self.accessible_label = label.into();
+        cx.notify();
+    }
+
+    /// `SetTextSelection` from assistive technology: moves the selection over the text runs.
+    pub(crate) fn on_a11y_set_selection(
+        &mut self,
+        data: Option<&gpui::accesskit::ActionData>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(gpui::accesskit::ActionData::SetTextSelection(requested)) = data else {
+            return;
+        };
+        let selection = crate::a11y::selection_from(requested, &self.a11y_runs.borrow());
+        if let Some(selection) = selection {
+            self.nav(cx, |editor| editor.set_selection(selection));
         }
     }
 

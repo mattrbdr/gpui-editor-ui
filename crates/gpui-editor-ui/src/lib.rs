@@ -9,6 +9,7 @@
 //! let view = cx.new(|cx| EditorView::new(doc, EditorTheme::default(), cx));
 //! ```
 
+mod a11y;
 mod keys;
 mod render;
 mod view;

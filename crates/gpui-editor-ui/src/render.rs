@@ -3,15 +3,16 @@
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, Context, ElementInputHandler, FontStyle, FontWeight, HighlightStyle, Hsla,
-    MouseButton, ObjectFit, ParentElement, PathBuilder, Render, StatefulInteractiveElement,
-    StrikethroughStyle, Styled, StyledImage, StyledText, TextLayout, UnderlineStyle, Window,
-    canvas, deferred, div, fill, img, point, prelude::*, px,
+    AccessibleAction, AnyElement, Context, Div, ElementInputHandler, FontStyle, FontWeight,
+    HighlightStyle, Hsla, MouseButton, ObjectFit, ParentElement, PathBuilder, Render, Role,
+    Stateful, StatefulInteractiveElement, StrikethroughStyle, Styled, StyledImage, StyledText,
+    TextLayout, Toggled, UnderlineStyle, Window, canvas, deferred, div, fill, img, point,
+    prelude::*, px,
 };
 use gpui_editor_core::{Kind, MarkKind, Node};
 
 use crate::{
-    keys,
+    a11y, keys,
     view::{EditorView, Marked, chars_to_bytes},
 };
 
@@ -236,6 +237,13 @@ impl EditorView {
                 .map(|(index, (label, _))| {
                     div()
                         .id(("gpui-editor-slash", index))
+                        .role(Role::ListBoxOption)
+                        .aria_label(*label)
+                        .aria_selected(index == selected)
+                        .when(
+                            index == selected,
+                            StatefulInteractiveElement::aria_active_descendant,
+                        )
                         .px_2()
                         .py_1()
                         .rounded_md()
@@ -256,6 +264,9 @@ impl EditorView {
                 .collect()
         };
         div()
+            .id("gpui-editor-slash-menu")
+            .role(Role::ListBox)
+            .aria_label("Insert block")
             .absolute()
             .top(line_height + px(4.0))
             .left(px(0.0))
@@ -358,6 +369,13 @@ impl EditorView {
                 .map(|(index, item)| {
                     div()
                         .id(("gpui-editor-mention", index))
+                        .role(Role::ListBoxOption)
+                        .aria_label(item.title.clone())
+                        .aria_selected(index == selected)
+                        .when(
+                            index == selected,
+                            StatefulInteractiveElement::aria_active_descendant,
+                        )
                         .px_2()
                         .py_1()
                         .rounded_md()
@@ -389,6 +407,9 @@ impl EditorView {
                 .collect()
         };
         div()
+            .id("gpui-editor-mention-menu")
+            .role(Role::ListBox)
+            .aria_label("Link to")
             .absolute()
             .top(line_height + px(4.0))
             .left(px(0.0))
@@ -454,6 +475,8 @@ impl EditorView {
             .child(
                 div()
                     .id(("gpui-editor-copy", index))
+                    .role(Role::Button)
+                    .aria_label(if copied { "Code copied" } else { "Copy code" })
                     .absolute()
                     .top(px(6.0))
                     .right(px(6.0))
@@ -693,6 +716,13 @@ fn checkbox(checked: bool, accent: Hsla, border: Hsla, mark: Hsla) -> AnyElement
     const SIDE: f32 = 16.0;
     let base = div()
         .id("gpui-editor-checkbox")
+        .role(Role::CheckBox)
+        .aria_label("Task")
+        .aria_toggled(if checked {
+            Toggled::True
+        } else {
+            Toggled::False
+        })
         .size(px(SIDE))
         .flex_none()
         .rounded(px(4.0))
@@ -771,8 +801,46 @@ fn overlay(cx: &Context<EditorView>, selection: Hsla, caret_color: Hsla) -> AnyE
     .into_any_element()
 }
 
+impl EditorView {
+    /// Exposes the editor to assistive technology: a multiline text input whose text runs (one per
+    /// block) and selection are only built while assistive technology is connected.
+    fn accessible(
+        &self,
+        root: Stateful<Div>,
+        window: &Window,
+        cx: &Context<Self>,
+    ) -> Stateful<Div> {
+        let runs = if window.is_a11y_active() {
+            a11y::text_runs(&self.editor)
+        } else {
+            Vec::new()
+        };
+        let selection = self.editor.selection();
+        let run_ids = self.a11y_runs.clone();
+        let view = cx.entity().downgrade();
+        root.role(Role::MultilineTextInput)
+            .aria_label(self.accessible_label.clone())
+            .a11y_synthetic_children(move |builder| {
+                let mut ids = run_ids.borrow_mut();
+                ids.clear();
+                for (index, run) in runs.into_iter().enumerate() {
+                    let id = builder.synthetic_node_id(index);
+                    builder.push_child(id, run);
+                    ids.push(id);
+                }
+                if let Some(selection) = a11y::text_selection(selection, &ids) {
+                    builder.parent_node().set_text_selection(selection);
+                }
+            })
+            .on_a11y_action(AccessibleAction::SetTextSelection, move |data, _, cx| {
+                view.update(cx, |view, cx| view.on_a11y_set_selection(data, cx))
+                    .ok();
+            })
+    }
+}
+
 impl Render for EditorView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut layouts = Vec::new();
         let mut counter = 0;
         let blocks =
@@ -780,7 +848,7 @@ impl Render for EditorView {
         self.layouts = layouts;
         let overlay = overlay(cx, self.theme.selection, self.theme.caret);
 
-        div()
+        self.accessible(div().id("gpui-editor"), window, cx)
             .key_context(keys::CONTEXT)
             .track_focus(&self.focus_handle)
             .size_full()

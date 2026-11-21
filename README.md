@@ -87,6 +87,12 @@ Try it: `cargo run -p gpui-editor-ui --example spike [file.md]`
   without a resolver, `file://` URLs and absolute paths are loaded. When there is no source or
   loading fails, the block shows an `[image: alt]` marker. The node is never changed. Images inside
   a paragraph stay markers.
+- **Accessibility** — through GPUI's AccessKit support, the editor is a multiline text input named
+  by `EditorView::set_accessible_label` (default "Document editor"). Its text is exposed one run per
+  block, with the caret and selection, and assistive technology can move the selection. The `/` and
+  `[[` menus are list boxes whose active option follows the keyboard; task checkboxes and the code
+  block "Copy" button have their roles. Checked on Linux through AT-SPI with `tools/a11y-tree.sh`;
+  not yet tried with a screen reader (Orca, NVDA, VoiceOver).
 - **Theme** — `EditorTheme` (fonts, colors, sizes) is supplied by the application; `EditorTheme::dark()`
   is a ready-made dark variant. Bold and italic need a font family that has them; `.SystemUIFont`
   does not render them everywhere.
@@ -110,8 +116,8 @@ Try it: `cargo run -p gpui-editor-ui --example spike [file.md]`
   </tr>
 </table>
 
-Known limits: no screen-reader accessibility yet, unknown nodes and inline images are shown as a
-`[name]` marker (they are kept in the document), and
+Known limits: unknown nodes and inline images are shown as a `[name]` marker (they are kept in the
+document), list and quote structure is not exposed to assistive technology yet, and
 IME composition is tested through the input-handler API rather than with a real ibus keyboard.
 Every block is laid out on each frame (no virtualization): typing in a 500-block document costs
 about 3 ms per keystroke in release, rendering included, so this is left until a real document
