@@ -189,7 +189,7 @@ impl EntityInputHandler for EditorView {
     ) -> Option<Bounds<Pixels>> {
         let pos = self.pos_from_utf16(range.start);
         let origin = self.caret_point(pos)?;
-        let height = self.layouts.get(pos.block)?.line_height();
+        let height = self.layouts.get(pos.block)?.as_ref()?.line_height();
         let _ = element_bounds;
         Some(Bounds::new(origin, size(px(1.0), height)))
     }

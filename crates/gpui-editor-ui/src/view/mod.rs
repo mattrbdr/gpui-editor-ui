@@ -211,7 +211,10 @@ pub struct EditorView {
     pub(crate) editor: Editor,
     pub(crate) theme: EditorTheme,
     pub(crate) focus_handle: FocusHandle,
-    pub(crate) layouts: Vec<TextLayout>,
+    /// Text layout of each text block, `None` for blocks outside the laid-out area.
+    pub(crate) layouts: Vec<Option<TextLayout>>,
+    /// Heights of the top-level blocks as last laid out (windowed rendering).
+    pub(crate) heights: Rc<std::cell::RefCell<crate::visible::Heights>>,
     pub(crate) painted: bool,
     pub(crate) selecting: bool,
     pub(crate) marked: Option<Marked>,
@@ -297,6 +300,7 @@ impl EditorView {
             theme,
             focus_handle: cx.focus_handle(),
             layouts: Vec::new(),
+            heights: Rc::default(),
             painted: false,
             selecting: false,
             marked: None,
@@ -392,6 +396,7 @@ impl EditorView {
     pub fn set_doc(&mut self, doc: Node, cx: &mut Context<Self>) {
         self.editor = Editor::new(doc);
         self.marked = None;
+        self.heights.borrow_mut().clear();
         self.painted = false;
         cx.notify();
     }
@@ -399,6 +404,7 @@ impl EditorView {
     /// Replaces the theme and redraws.
     pub fn set_theme(&mut self, theme: EditorTheme, cx: &mut Context<Self>) {
         self.theme = theme;
+        self.heights.borrow_mut().clear();
         cx.notify();
     }
 
@@ -411,6 +417,7 @@ impl EditorView {
         cx: &mut Context<Self>,
     ) {
         self.image_resolver = Some(Rc::new(resolve));
+        self.heights.borrow_mut().clear();
         cx.notify();
     }
 
@@ -480,7 +487,7 @@ impl EditorView {
         if !self.ready() {
             return None;
         }
-        let bounds = self.layouts.get(block)?.bounds();
+        let bounds = self.layouts.get(block)?.as_ref()?.bounds();
         Some((bounds.top(), bounds.left()))
     }
 

@@ -28,6 +28,7 @@ mod a11y;
 mod keys;
 mod render;
 mod view;
+mod visible;
 
 pub use keys::bind_keys;
 pub use view::{EditorEvent, EditorTheme, EditorView, EmbedCard, ImageResolver, MentionItem};

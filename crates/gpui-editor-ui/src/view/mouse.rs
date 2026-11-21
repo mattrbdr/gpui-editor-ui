@@ -145,6 +145,23 @@ impl EditorView {
         self.scroll.bounds().bottom()
     }
 
+    /// Number of text blocks laid out by the last frame (windowed rendering, tests).
+    #[must_use]
+    #[cfg(feature = "test-support")]
+    pub fn laid_out_blocks_for_tests(&self) -> usize {
+        self.layouts
+            .iter()
+            .filter(|layout| layout.is_some())
+            .count()
+    }
+
+    /// Largest vertical scroll offset, which follows the height of the whole document (tests).
+    #[must_use]
+    #[cfg(feature = "test-support")]
+    pub fn scroll_max_for_tests(&self) -> Pixels {
+        self.scroll.max_offset().y
+    }
+
     /// Starts a mouse selection (tests and integrations).
     #[cfg(feature = "test-support")]
     pub fn begin_selection_for_tests(&mut self) {

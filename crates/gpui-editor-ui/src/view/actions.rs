@@ -153,16 +153,17 @@ impl EditorView {
         let Some(origin) = self.caret_point(head) else {
             return;
         };
-        let line = self.layouts[head.block].line_height();
+        let Some(layout) = self.layouts[head.block].clone() else {
+            return;
+        };
+        let line = layout.line_height();
         let x = *self.goal_x.get_or_insert(origin.x);
         let target = point(x, origin.y + line / 2.0 + line * direction);
-        let at_edge = (direction < 0.0
-            && head.block == 0
-            && origin.y - self.layouts[0].bounds().top() < line / 2.0)
-            || (direction > 0.0 && head.block + 1 == self.layouts.len() && {
-                let bounds = self.layouts[head.block].bounds();
-                bounds.bottom() - origin.y < line * 1.5
-            });
+        let at_edge =
+            (direction < 0.0 && head.block == 0 && origin.y - layout.bounds().top() < line / 2.0)
+                || (direction > 0.0
+                    && head.block + 1 == self.layouts.len()
+                    && layout.bounds().bottom() - origin.y < line * 1.5);
         let goal = self.goal_x;
         if at_edge {
             if direction < 0.0 {
@@ -182,7 +183,12 @@ impl EditorView {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub(super) fn page(&mut self, direction: f32, extend: bool, cx: &mut Context<Self>) {
         let head = self.editor.selection().head;
-        let Some(line) = self.layouts.get(head.block).map(TextLayout::line_height) else {
+        let Some(line) = self
+            .layouts
+            .get(head.block)
+            .and_then(Option::as_ref)
+            .map(TextLayout::line_height)
+        else {
             return;
         };
         let lines = (self.scroll.bounds().size.height / line).floor().max(2.0) - 1.0;

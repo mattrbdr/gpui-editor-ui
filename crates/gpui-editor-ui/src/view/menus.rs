@@ -215,6 +215,7 @@ impl EditorView {
         cx: &mut Context<Self>,
     ) {
         self.embeds = embeds;
+        self.heights.borrow_mut().clear();
         cx.notify();
     }
 
