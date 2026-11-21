@@ -23,9 +23,9 @@ sleep 1
 # 2x rendering for sharp images.
 export GPUI_X11_SCALE_FACTOR="${SCALE:-2}"
 
-# Starts the example on the demo document and prints its window id once it has painted.
+# Starts the example on a demo document (default: demo.md) and waits until it has painted.
 start() {
-  SPIKE_FONT="${SPIKE_FONT:-Inter}" "$spike" "$out/demo.md" >/dev/null 2>&1 &
+  SPIKE_FONT="${SPIKE_FONT:-Inter}" "$spike" "$out/${1:-demo.md}" >/dev/null 2>&1 &
   app=$!
   for _ in $(seq 50); do
     window="$(xdotool search --pid "$app" 2>/dev/null | tail -1 || true)"
@@ -65,6 +65,16 @@ xdotool key --window "$window" ctrl+Home Down
 xdotool key --window "$window" --delay 60 shift+Down shift+Down shift+Down shift+End
 sleep 1
 shot selection
+stop
+
+# 4. The dark theme.
+SPIKE_THEME=dark start
+shot dark
+stop
+
+# 5. An image block, loaded through the example's image resolver.
+start image-demo.md
+shot image
 stop
 
 echo "Screenshots written to $out"

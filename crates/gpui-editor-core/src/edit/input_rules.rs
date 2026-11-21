@@ -7,7 +7,7 @@ use crate::{Kind, Mark, MarkKind, Node};
 use super::{
     Editor, Pos, Selection,
     atoms::{Atom, find_opening, flat_text},
-    tree::{node_at, node_at_mut},
+    tree::node_at,
 };
 
 impl Editor {
@@ -65,7 +65,7 @@ impl Editor {
                 if start != 1
                     && let Some((list_path, _)) = self.list_context(block)
                 {
-                    node_at_mut(self.doc_mut(), &list_path)
+                    self.node_mut(&list_path)
                         .attrs
                         .insert("start".into(), Value::from(start));
                 }
@@ -73,7 +73,7 @@ impl Editor {
             Rule::Task(checked) => {
                 self.ensure_list(Kind::TaskList);
                 if let Some((list_path, item)) = self.list_context(block) {
-                    let item_node = &mut node_at_mut(self.doc_mut(), &list_path).content[item];
+                    let item_node = &mut self.node_mut(&list_path).content[item];
                     item_node
                         .attrs
                         .insert("checked".into(), Value::Bool(checked));
@@ -100,7 +100,7 @@ impl Editor {
         let Some((index, parent)) = path.split_last() else {
             return;
         };
-        let container = node_at_mut(self.doc_mut(), parent);
+        let container = self.node_mut(parent);
         let child = container.content.remove(*index);
         let mut quote = Node::new(Kind::Blockquote);
         quote.content.push(child);
@@ -116,7 +116,7 @@ impl Editor {
         if node_at(&self.doc, parent_path).kind == Kind::Blockquote {
             if let Some((index, above)) = parent_path.split_last() {
                 let quote = node_at(&self.doc, parent_path).clone();
-                node_at_mut(self.doc_mut(), above)
+                self.node_mut(above)
                     .content
                     .splice(*index..=*index, quote.content);
             }
@@ -200,7 +200,7 @@ impl Editor {
         let Some((index, parent)) = path.split_last() else {
             return false;
         };
-        node_at_mut(self.doc_mut(), parent)
+        self.node_mut(parent)
             .content
             .insert(*index + 1, Node::new(Kind::Paragraph));
         let mut fresh = parent.to_vec();
@@ -252,7 +252,7 @@ impl Editor {
             let Some((index, parent)) = path.split_last() else {
                 return false;
             };
-            let container = node_at_mut(self.doc_mut(), parent);
+            let container = self.node_mut(parent);
             container.content[*index] = Node::new(Kind::HorizontalRule);
             container
                 .content

@@ -6,11 +6,12 @@ mod ime;
 mod menus;
 mod mouse;
 
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
-    App, ClipboardItem, Context, EventEmitter, FocusHandle, Focusable, Hsla, Pixels, ScrollHandle,
-    SharedString, Task, TextLayout, Window, hsla, point, px,
+    App, ClipboardItem, Context, EventEmitter, FocusHandle, Focusable, Hsla, ImageSource, Pixels,
+    ScrollHandle, SharedString, Task, TextLayout, Window, hsla, point, px,
 };
 use gpui_editor_core::{BlockCommand, Editor, Node};
 #[cfg(feature = "test-support")]
@@ -19,17 +20,29 @@ use gpui_editor_core::{Pos, Selection};
 /// Editor colors, fonts and sizes.
 #[derive(Debug, Clone)]
 pub struct EditorTheme {
+    /// Font family of the text and menus; it needs bold and italic faces to render those marks.
     pub font_family: SharedString,
+    /// Font family of code blocks.
     pub mono_family: SharedString,
+    /// Base font size (headings are scaled from it).
     pub font_size: Pixels,
+    /// Base line height (headings are scaled from it).
     pub line_height: Pixels,
+    /// Background of the editor and of its menus.
     pub background: Hsla,
+    /// Main text color.
     pub text: Hsla,
+    /// Secondary text: list markers, checked tasks, `[name]` markers, menu details.
     pub muted: Hsla,
+    /// Caret color, also the fill of checked task boxes.
     pub caret: Hsla,
+    /// Selection highlight and the active row of the menus.
     pub selection: Hsla,
+    /// Link and mention color.
     pub link: Hsla,
+    /// Background of inline code, code blocks, mentions, embed cards and hovered menu rows.
     pub code_background: Hsla,
+    /// Borders (menus, cards, quote bar, task boxes) and horizontal rules.
     pub border: Hsla,
 }
 
@@ -50,6 +63,44 @@ impl Default for EditorTheme {
             border: hsla(0.0, 0.0, 0.0, 0.2),
         }
     }
+}
+
+impl EditorTheme {
+    /// Dark variant of the default theme: light text on a dark gray background, with contrasts of
+    /// at least 4.5:1 for the text, links and muted text.
+    ///
+    /// ```
+    /// use gpui_editor_ui::EditorTheme;
+    ///
+    /// let mut theme = EditorTheme::dark();
+    /// theme.font_family = "Inter".into();
+    /// assert_eq!(theme.font_size, EditorTheme::default().font_size);
+    /// assert!(theme.background.l < theme.text.l);
+    /// ```
+    #[must_use]
+    pub fn dark() -> Self {
+        Self {
+            background: hsla(0.0, 0.0, 0.11, 1.0),
+            text: hsla(0.0, 0.0, 0.9, 1.0),
+            muted: hsla(0.0, 0.0, 0.62, 1.0),
+            caret: hsla(0.6, 0.9, 0.68, 1.0),
+            selection: hsla(0.6, 0.9, 0.6, 0.35),
+            link: hsla(0.58, 0.9, 0.72, 1.0),
+            code_background: hsla(0.0, 0.0, 1.0, 0.08),
+            border: hsla(0.0, 0.0, 1.0, 0.22),
+            ..Self::default()
+        }
+    }
+}
+
+/// Resolves the `src` attribute of an image block into something GPUI can load.
+pub type ImageResolver = Rc<dyn Fn(&str) -> Option<ImageSource>>;
+
+/// Default image resolution: `file://` URLs and absolute paths; anything else stays a marker.
+fn default_image_source(src: &str) -> Option<ImageSource> {
+    let path = src.strip_prefix("file://").unwrap_or(src);
+    let path = std::path::Path::new(path);
+    path.is_absolute().then(|| ImageSource::from(path))
 }
 
 /// Event emitted by the editor.
@@ -90,9 +141,13 @@ pub(crate) struct Slash {
 /// title, subtitle and a small table.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EmbedCard {
+    /// Title, shown first.
     pub title: String,
+    /// Line shown under the title, in the muted color.
     pub subtitle: String,
+    /// Column headers of the table; no header row when empty.
     pub columns: Vec<String>,
+    /// Table rows, one cell per column.
     pub rows: Vec<Vec<String>>,
 }
 
@@ -117,32 +172,36 @@ pub struct MentionItem {
 
 /// `/` menu commands: label, search keywords, effect.
 pub(crate) const SLASH_COMMANDS: [(&str, &str, BlockCommand); 10] = [
-    ("Text", "texte paragraphe text", BlockCommand::Paragraph),
-    ("Heading 1", "titre heading h1 #", BlockCommand::Heading(1)),
-    ("Heading 2", "titre heading h2 ##", BlockCommand::Heading(2)),
+    ("Text", "text paragraph", BlockCommand::Paragraph),
+    ("Heading 1", "heading title h1 #", BlockCommand::Heading(1)),
+    ("Heading 2", "heading title h2 ##", BlockCommand::Heading(2)),
     (
         "Heading 3",
-        "titre heading h3 ###",
+        "heading title h3 ###",
         BlockCommand::Heading(3),
     ),
     (
         "Bulleted list",
-        "liste puces bullet ul -",
+        "bulleted list bullet ul -",
         BlockCommand::BulletList,
     ),
     (
         "Numbered list",
-        "liste numerotee ordered ol 1.",
+        "numbered list ordered ol 1.",
         BlockCommand::OrderedList,
     ),
     (
         "Task list",
-        "liste taches todo checkbox [ ]",
+        "task list todo checkbox [ ]",
         BlockCommand::TaskList,
     ),
-    ("Quote", "citation quote >", BlockCommand::Quote),
-    ("Code block", "code bloc ```", BlockCommand::CodeBlock),
-    ("Divider", "separateur ligne hr ---", BlockCommand::Rule),
+    ("Quote", "quote blockquote >", BlockCommand::Quote),
+    ("Code block", "code block ```", BlockCommand::CodeBlock),
+    (
+        "Divider",
+        "divider rule separator hr ---",
+        BlockCommand::Rule,
+    ),
 ];
 
 /// Editing component: a document, its selection and its history.
@@ -162,6 +221,12 @@ pub struct EditorView {
     mention_query: String,
     /// Previews of unknown blocks, keyed by the value of their `viewId` attribute.
     pub(crate) embeds: std::collections::HashMap<String, EmbedCard>,
+    /// Resolution of image sources, see [`EditorView::set_image_resolver`].
+    pub(crate) image_resolver: Option<ImageResolver>,
+    /// Name of the editor for assistive technology.
+    pub(crate) accessible_label: SharedString,
+    /// Ids of the accessibility text runs of the last frame, one per text block.
+    pub(crate) a11y_runs: Rc<std::cell::RefCell<Vec<gpui::accesskit::NodeId>>>,
     /// Code block whose "Copy" button was just used.
     pub(crate) copied: Option<usize>,
     /// Vertical scrolling of the document.
@@ -240,6 +305,9 @@ impl EditorView {
             mention_items: Vec::new(),
             mention_query: String::new(),
             embeds: std::collections::HashMap::new(),
+            image_resolver: None,
+            accessible_label: "Document editor".into(),
+            a11y_runs: Rc::default(),
             copied: None,
             scroll: ScrollHandle::new(),
             reveal_caret: false,
@@ -327,9 +395,51 @@ impl EditorView {
         cx.notify();
     }
 
+    /// Replaces the theme and redraws.
     pub fn set_theme(&mut self, theme: EditorTheme, cx: &mut Context<Self>) {
         self.theme = theme;
         cx.notify();
+    }
+
+    /// Sets how the `src` of an image block is loaded: return `None` to show the `[image: alt]`
+    /// marker instead. Without a resolver, `file://` URLs and absolute paths are loaded. The
+    /// document itself is never changed. Images inside a paragraph stay markers.
+    pub fn set_image_resolver(
+        &mut self,
+        resolve: impl Fn(&str) -> Option<ImageSource> + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.image_resolver = Some(Rc::new(resolve));
+        cx.notify();
+    }
+
+    /// Image source for the `src` of an image block, see [`EditorView::set_image_resolver`].
+    pub(crate) fn resolve_image(&self, src: &str) -> Option<ImageSource> {
+        match &self.image_resolver {
+            Some(resolve) => resolve(src),
+            None => default_image_source(src),
+        }
+    }
+
+    /// Sets the name assistive technology announces for the editor (default: "Document editor").
+    pub fn set_accessible_label(&mut self, label: impl Into<SharedString>, cx: &mut Context<Self>) {
+        self.accessible_label = label.into();
+        cx.notify();
+    }
+
+    /// `SetTextSelection` from assistive technology: moves the selection over the text runs.
+    pub(crate) fn on_a11y_set_selection(
+        &mut self,
+        data: Option<&gpui::accesskit::ActionData>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(gpui::accesskit::ActionData::SetTextSelection(requested)) = data else {
+            return;
+        };
+        let selection = crate::a11y::selection_from(requested, &self.a11y_runs.borrow());
+        if let Some(selection) = selection {
+            self.nav(cx, |editor| editor.set_selection(selection));
+        }
     }
 
     /// Gives keyboard focus to the editor.

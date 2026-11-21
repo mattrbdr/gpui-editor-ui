@@ -7,7 +7,7 @@ use crate::{Kind, Mark, Node};
 use super::{
     BlockCommand, Editor, Pos, Selection,
     atoms::{Atom, mention_atoms, mention_mark, next_bound, prev_bound, rebuild, word_spans},
-    tree::{Path, blocks_in_order, is_item, node_at, node_at_mut, remove_at},
+    tree::{Path, blocks_in_order, is_item, node_at, remove_at},
 };
 
 impl Editor {
@@ -46,7 +46,7 @@ impl Editor {
             .iter()
             .map(|(path, _)| path.clone())
             .collect();
-        rebuild(node_at_mut(self.doc_mut(), &start_path), &merged);
+        rebuild(self.node_mut(&start_path), &merged);
         doomed.sort();
         for path in doomed.iter().rev() {
             remove_at(self.doc_mut(), path);
@@ -85,6 +85,9 @@ impl Editor {
             .any(|(path, text)| !*text && matches!(node_at(&self.doc, path).kind, Kind::Other(_)))
     }
 
+    /// Backspace: deletes the selection or the previous grapheme. At the start of a block, turns
+    /// a non-paragraph into a paragraph, or joins a paragraph with the previous block (not across
+    /// an unknown block).
     pub fn delete_backward(&mut self) {
         // Joining across an unknown block would delete it without the user seeing it: do nothing.
         let head = self.selection.head;
@@ -124,6 +127,8 @@ impl Editor {
         }
     }
 
+    /// Delete: deletes the selection or the next grapheme; at the end of a block, joins the next
+    /// block (not across an unknown block).
     pub fn delete_forward(&mut self) {
         let head = self.selection.head;
         if self.selection.is_collapsed()
@@ -317,7 +322,7 @@ impl Editor {
         let Some((index, parent)) = path.split_last() else {
             return;
         };
-        let container = node_at_mut(self.doc_mut(), parent);
+        let container = self.node_mut(parent);
         let at = if empty {
             container.content[*index] = Node::new(Kind::HorizontalRule);
             *index + 1
@@ -402,6 +407,7 @@ impl Editor {
         });
     }
 
+    /// Shift+Enter: replaces the selection with a `hardBreak` (a `\n` character in a code block).
     pub fn insert_hard_break(&mut self) {
         self.checkpoint();
         if !self.selection.is_collapsed() {
@@ -472,12 +478,13 @@ impl Editor {
             new_block.attrs.clone_from(&node_at(&self.doc, &path).attrs);
         }
         rebuild(&mut new_block, right);
-        rebuild(node_at_mut(self.doc_mut(), &path), left);
+        rebuild(self.node_mut(&path), left);
         let index = path[path.len() - 1];
         let new_path = if in_item {
             let item_index = parent_path[parent_path.len() - 1];
             let list_path = &parent_path[..parent_path.len() - 1];
-            let following: Vec<Node> = node_at_mut(self.doc_mut(), parent_path)
+            let following: Vec<Node> = self
+                .node_mut(parent_path)
                 .content
                 .drain(index + 1..)
                 .collect();
@@ -487,14 +494,14 @@ impl Editor {
             }
             item.content.push(new_block);
             item.content.extend(following);
-            node_at_mut(self.doc_mut(), list_path)
+            self.node_mut(list_path)
                 .content
                 .insert(item_index + 1, item);
             let mut new_path = list_path.to_vec();
             new_path.extend([item_index + 1, 0]);
             new_path
         } else {
-            node_at_mut(self.doc_mut(), parent_path)
+            self.node_mut(parent_path)
                 .content
                 .insert(index + 1, new_block);
             let mut new_path = parent_path.to_vec();
@@ -521,26 +528,27 @@ impl Editor {
         let list_len = node_at(&self.doc, list_path).content.len();
         let paragraph = Node::new(Kind::Paragraph);
         let target = if list_len == 1 {
-            node_at_mut(self.doc_mut(), list_parent).content[list_index] = paragraph;
+            self.node_mut(list_parent).content[list_index] = paragraph;
             list_path.to_vec()
         } else if item_index + 1 == list_len {
-            node_at_mut(self.doc_mut(), list_path).content.pop();
-            node_at_mut(self.doc_mut(), list_parent)
+            self.node_mut(list_path).content.pop();
+            self.node_mut(list_parent)
                 .content
                 .insert(list_index + 1, paragraph);
             let mut path = list_parent.to_vec();
             path.push(list_index + 1);
             path
         } else if item_index == 0 {
-            node_at_mut(self.doc_mut(), list_path).content.remove(0);
-            node_at_mut(self.doc_mut(), list_parent)
+            self.node_mut(list_path).content.remove(0);
+            self.node_mut(list_parent)
                 .content
                 .insert(list_index, paragraph);
             let mut path = list_parent.to_vec();
             path.push(list_index);
             path
         } else {
-            let tail: Vec<Node> = node_at_mut(self.doc_mut(), list_path)
+            let tail: Vec<Node> = self
+                .node_mut(list_path)
                 .content
                 .drain(item_index..)
                 .collect();
@@ -549,7 +557,7 @@ impl Editor {
                 .attrs
                 .clone_from(&node_at(&self.doc, list_path).attrs);
             second.content = tail.into_iter().skip(1).collect();
-            let parent = node_at_mut(self.doc_mut(), list_parent);
+            let parent = self.node_mut(list_parent);
             parent.content.insert(list_index + 1, paragraph);
             if !second.content.is_empty() {
                 parent.content.insert(list_index + 2, second);

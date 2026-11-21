@@ -134,6 +134,24 @@ impl Node {
     /// # Errors
     ///
     /// [`Error::Json`] if the text is not JSON, otherwise the errors of [`Node::from_json`].
+    ///
+    /// # Examples
+    ///
+    /// Unknown nodes and the source key order survive a round trip:
+    ///
+    /// ```
+    /// use gpui_editor_core::{Kind, Node};
+    ///
+    /// let json = concat!(
+    ///     r#"{"type":"doc","content":["#,
+    ///     r#"{"type":"paragraph","content":[{"text":"Hi","type":"text"}]},"#,
+    ///     r#"{"type":"emoji","attrs":{"name":"smile"}}]}"#,
+    /// );
+    /// let doc = Node::from_json_str(json)?;
+    /// assert_eq!(doc.content[1].kind, Kind::Other("emoji".into()));
+    /// assert_eq!(doc.to_json_string(), json);
+    /// # Ok::<(), gpui_editor_core::Error>(())
+    /// ```
     pub fn from_json_str(source: &str) -> Result<Self, Error> {
         Self::from_json(&serde_json::from_str(source)?)
     }

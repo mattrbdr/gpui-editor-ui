@@ -22,17 +22,34 @@ pub enum Flavor {
 /// Export options.
 #[derive(Debug, Clone, Default)]
 pub struct MarkdownOptions {
+    /// Markdown variant to produce ([`Flavor::CommonMark`] by default).
     pub flavor: Flavor,
 }
 
 impl Node {
     /// CommonMark Markdown of the node (without a trailing line break).
+    ///
+    /// ```
+    /// use gpui_editor_core::Node;
+    ///
+    /// let doc = Node::from_markdown("# Title\n\n- one\n- *two*");
+    /// assert_eq!(doc.to_markdown(), "# Title\n\n- one\n- *two*");
+    /// ```
     #[must_use]
     pub fn to_markdown(&self) -> String {
         self.to_markdown_with(&MarkdownOptions::default())
     }
 
     /// Markdown of the node in the chosen flavor.
+    ///
+    /// ```
+    /// use gpui_editor_core::{Flavor, MarkdownOptions, Node};
+    ///
+    /// let doc = Node::from_markdown("Fish & chips");
+    /// let tiptap = MarkdownOptions { flavor: Flavor::TipTapCompat };
+    /// assert_eq!(doc.to_markdown(), "Fish & chips");
+    /// assert_eq!(doc.to_markdown_with(&tiptap), "Fish &amp; chips");
+    /// ```
     #[must_use]
     pub fn to_markdown_with(&self, options: &MarkdownOptions) -> String {
         let compat = options.flavor == Flavor::TipTapCompat;

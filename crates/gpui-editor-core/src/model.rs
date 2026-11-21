@@ -3,18 +3,31 @@ use serde_json::{Map, Value};
 /// Node type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Kind {
+    /// `doc`: the root node.
     Doc,
+    /// `paragraph`: text block.
     Paragraph,
+    /// `heading`: text block whose level is in the `level` attribute.
     Heading,
+    /// `codeBlock`: text block of unformatted text; language in the `language` attribute.
     CodeBlock,
+    /// `blockquote`: container of blocks.
     Blockquote,
+    /// `bulletList`: list of [`Kind::ListItem`].
     BulletList,
+    /// `orderedList`: numbered list of [`Kind::ListItem`].
     OrderedList,
+    /// `taskList`: list of [`Kind::TaskItem`].
     TaskList,
+    /// `listItem`: item of a bullet or ordered list.
     ListItem,
+    /// `taskItem`: item of a task list; state in the `checked` attribute.
     TaskItem,
+    /// `horizontalRule`: thematic break (leaf block).
     HorizontalRule,
+    /// `hardBreak`: line break inside a text block (inline leaf).
     HardBreak,
+    /// `text`: inline text, in [`Node::text`], with its [`Node::marks`].
     Text,
     /// Unrecognized type, kept by name.
     Other(String),
@@ -79,17 +92,24 @@ impl Kind {
 /// Inline mark type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum MarkKind {
+    /// `bold`.
     Bold,
+    /// `italic`.
     Italic,
+    /// `strike`: strikethrough.
     Strike,
+    /// `underline`.
     Underline,
+    /// `code`: inline code.
     Code,
+    /// `link`: URL in the `href` attribute.
     Link,
     /// Unrecognized mark, kept by name.
     Other(String),
 }
 
 impl MarkKind {
+    /// Mark type matching a ProseMirror name (`"bold"`, `"link"`…).
     #[must_use]
     pub fn from_name(name: &str) -> Self {
         match name {
@@ -103,6 +123,7 @@ impl MarkKind {
         }
     }
 
+    /// ProseMirror name of the mark.
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
@@ -120,7 +141,9 @@ impl MarkKind {
 /// Mark applied to text (bold, link…).
 #[derive(Debug, Clone)]
 pub struct Mark {
+    /// Mark type.
     pub kind: MarkKind,
+    /// Attributes (`attrs`), for example `href` for a link; empty if there are none.
     pub attrs: Map<String, Value>,
     pub(crate) shape: Shape,
 }
@@ -132,6 +155,7 @@ impl PartialEq for Mark {
 }
 
 impl Mark {
+    /// Mark of the given type, without attributes.
     #[must_use]
     pub fn new(kind: MarkKind) -> Self {
         Self {
@@ -190,9 +214,13 @@ pub(crate) struct Shape {
 /// Document node (same shape as ProseMirror).
 #[derive(Debug, Clone)]
 pub struct Node {
+    /// Node type.
     pub kind: Kind,
+    /// Attributes (`attrs`); empty if there are none.
     pub attrs: Map<String, Value>,
+    /// Child nodes (`content`), in order.
     pub content: Vec<Node>,
+    /// Marks of an inline node (`marks`), usually a [`Kind::Text`] node.
     pub marks: Vec<Mark>,
     /// Text of a [`Kind::Text`] node.
     pub text: Option<String>,
