@@ -29,6 +29,8 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy -p gpui-editor-core --all-targets
       - run: cargo test -p gpui-editor-core
+      # Complexity guards: costs must not grow faster than the document (release only).
+      - run: cargo test -p gpui-editor-core --release --test scaling -- --nocapture --test-threads=1
       - run: cargo doc -p gpui-editor-core --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
