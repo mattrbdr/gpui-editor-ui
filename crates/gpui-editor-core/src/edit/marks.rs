@@ -4,7 +4,7 @@ use serde_json::{Map, Value};
 
 use crate::{Kind, Mark, MarkKind};
 
-use super::{Editor, Pos, Selection, atoms::rebuild, tree::node_at_mut};
+use super::{Editor, Pos, Selection, atoms::rebuild};
 
 impl Editor {
     // --- Blocks and marks ---
@@ -24,7 +24,7 @@ impl Editor {
             }
         }
         let path = self.path_of(block);
-        let node = node_at_mut(self.doc_mut(), &path);
+        let node = self.node_mut(&path);
         node.kind = kind;
         node.attrs = attrs;
         node.shape = crate::model::Shape::default();

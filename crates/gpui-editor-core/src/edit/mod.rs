@@ -13,7 +13,7 @@ mod tree;
 mod typing;
 
 use std::collections::VecDeque;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use crate::{Kind, Mark, Node};
 
@@ -59,9 +59,13 @@ impl Selection {
     }
 }
 
+/// A past state of the document. Top-level blocks are shared with the other snapshots and with
+/// [`Editor::shared`] as long as they do not change.
 #[derive(Debug, Clone)]
 struct Snapshot {
-    doc: Node,
+    /// The document node without its children.
+    root: Node,
+    children: Vec<Arc<Node>>,
     selection: Selection,
 }
 
@@ -84,6 +88,11 @@ pub struct Editor {
     doc: Node,
     /// Paths of the text blocks, in document order; reset by every mutation of `doc`.
     index: OnceLock<Vec<Path>>,
+    /// Shared copies of the top-level blocks of `doc`, taken by the last snapshot. When `aligned`,
+    /// `shared[i]` is `Some` only while `doc.content[i]` is unchanged; otherwise the entries are
+    /// matched again against `doc.content` at the next snapshot.
+    shared: Vec<Option<Arc<Node>>>,
+    aligned: bool,
     selection: Selection,
     stored_marks: Option<Vec<Mark>>,
     undo: VecDeque<Snapshot>,
@@ -103,6 +112,8 @@ impl Editor {
         Self {
             doc,
             index: OnceLock::new(),
+            shared: Vec::new(),
+            aligned: false,
             selection: Selection::default(),
             stored_marks: None,
             undo: VecDeque::new(),
@@ -146,15 +157,27 @@ impl Editor {
         index
     }
 
-    /// Mutable access to the document; invalidates the text block index.
+    /// Mutable access to the whole document; invalidates the text block index and the alignment
+    /// of the shared blocks.
     fn doc_mut(&mut self) -> &mut Node {
         self.index.take();
+        self.aligned = false;
         &mut self.doc
     }
 
-    fn set_doc(&mut self, doc: Node) {
+    /// Mutable access to the node at `path`: only its top-level block stops being shared.
+    fn node_mut(&mut self, path: &[usize]) -> &mut Node {
         self.index.take();
-        self.doc = doc;
+        match path.first() {
+            Some(&top) if self.aligned => {
+                if let Some(entry) = self.shared.get_mut(top) {
+                    *entry = None;
+                }
+            }
+            Some(_) => {}
+            None => self.aligned = false,
+        }
+        node_at_mut(&mut self.doc, path)
     }
 
     #[must_use]
@@ -173,7 +196,7 @@ impl Editor {
 
     fn set_atoms(&mut self, block: usize, atoms: &[Atom]) {
         let path = self.path_of(block);
-        rebuild(node_at_mut(self.doc_mut(), &path), atoms);
+        rebuild(self.node_mut(&path), atoms);
     }
 
     /// Text of the block (a line break for each hard break).
