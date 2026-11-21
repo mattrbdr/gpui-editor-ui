@@ -13,7 +13,9 @@ fn large_markdown() -> String {
     let mut out = String::new();
     for section in 0..200 {
         writeln!(out, "## Section {section}\n").unwrap();
-        out.push_str("Some **bold** text, some *italic* text and a [link](https://example.com).\n\n");
+        out.push_str(
+            "Some **bold** text, some *italic* text and a [link](https://example.com).\n\n",
+        );
         out.push_str("- First item\n- Second item\n  - Nested item\n\n");
         out.push_str("- [ ] A task\n- [x] Done\n\n");
         out.push_str("> A quote\n\n");

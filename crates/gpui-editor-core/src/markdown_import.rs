@@ -382,7 +382,11 @@ fn split_mixed_lists(node: &mut Node) {
         }
         let mut run: Option<Node> = None;
         for item in std::mem::take(&mut child.content) {
-            let kind = if item.kind == Kind::TaskItem { Kind::TaskList } else { Kind::BulletList };
+            let kind = if item.kind == Kind::TaskItem {
+                Kind::TaskList
+            } else {
+                Kind::BulletList
+            };
             if run.as_ref().is_some_and(|r| r.kind != kind) {
                 out.extend(run.take());
             }

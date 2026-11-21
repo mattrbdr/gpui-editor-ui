@@ -667,7 +667,10 @@ fn dragging_below_the_viewport_scrolls_and_extends_the_selection(cx: &mut TestAp
     cx.run_until_parked();
     assert!(moved, "le pointeur sous la zone visible fait défiler");
     assert!(window.read_with(cx, |v, _| v.scroll_offset_y()).unwrap() < px(0.0));
-    assert!(caret(cx, window).head.block > 0, "la sélection s'étend vers le bas");
+    assert!(
+        caret(cx, window).head.block > 0,
+        "la sélection s'étend vers le bas"
+    );
     assert_eq!(caret(cx, window).anchor.block, 0);
 }
 
@@ -687,11 +690,24 @@ fn ctrl_k_asks_for_a_link_and_apply_link_sets_it(cx: &mut TestAppContext) {
     });
     set_caret(cx, window, 0, 9); // dans « page »
     cx.simulate_keystrokes(any(window), "ctrl-k");
-    assert_eq!(requests.borrow().as_slice(), [None], "pas encore de lien : demande vide");
-    assert_eq!(caret(cx, window).start().offset..caret(cx, window).end().offset, 8..12, "le mot est sélectionné");
+    assert_eq!(
+        requests.borrow().as_slice(),
+        [None],
+        "pas encore de lien : demande vide"
+    );
+    assert_eq!(
+        caret(cx, window).start().offset..caret(cx, window).end().offset,
+        8..12,
+        "le mot est sélectionné"
+    );
     window
-        .update(cx, |view, _, cx| view.apply_link(Some("https://exemple.fr"), cx))
+        .update(cx, |view, _, cx| {
+            view.apply_link(Some("https://exemple.fr"), cx)
+        })
         .unwrap();
     cx.simulate_keystrokes(any(window), "ctrl-k");
-    assert_eq!(requests.borrow().last().cloned().flatten().as_deref(), Some("https://exemple.fr"));
+    assert_eq!(
+        requests.borrow().last().cloned().flatten().as_deref(),
+        Some("https://exemple.fr")
+    );
 }

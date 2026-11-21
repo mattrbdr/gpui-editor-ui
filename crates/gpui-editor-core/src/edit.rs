@@ -136,13 +136,20 @@ const MENTION: &str = "mention";
 fn mention_text(attrs: &Map<String, Value>) -> String {
     let label = ["label", "id"]
         .iter()
-        .find_map(|key| attrs.get(*key).and_then(Value::as_str).filter(|v| !v.is_empty()))
+        .find_map(|key| {
+            attrs
+                .get(*key)
+                .and_then(Value::as_str)
+                .filter(|v| !v.is_empty())
+        })
         .unwrap_or("Lien");
     format!("[[{label}]]")
 }
 
 fn mention_mark(atom: &Atom) -> Option<&Mark> {
-    atom.marks.iter().find(|m| m.kind == MarkKind::Other(MENTION.to_owned()))
+    atom.marks
+        .iter()
+        .find(|m| m.kind == MarkKind::Other(MENTION.to_owned()))
 }
 
 /// Atomes d'une mention : le texte `[[titre]]`, chaque caractère portant la marque interne.
@@ -153,7 +160,12 @@ fn mention_atoms(attrs: &Map<String, Value>, extra: &[Mark]) -> Vec<Atom> {
     marks.extend(extra.iter().cloned());
     mention_text(attrs)
         .chars()
-        .map(|ch| Atom { ch, marks: marks.clone(), hard_break: false, node: None })
+        .map(|ch| Atom {
+            ch,
+            marks: marks.clone(),
+            hard_break: false,
+            node: None,
+        })
         .collect()
 }
 
@@ -221,14 +233,24 @@ fn rebuild(block: &mut Node, atoms: &[Atom]) {
         let mut marks = atom.marks.clone();
         if let Some(mark) = mention_mark(atom) {
             let expected: Vec<char> = mention_text(&mark.attrs).chars().collect();
-            let whole = atoms.get(index..index + expected.len()).is_some_and(|slice| {
-                slice.iter().zip(&expected).all(|(a, c)| a.ch == *c && mention_mark(a) == Some(mark))
-            });
+            let whole = atoms
+                .get(index..index + expected.len())
+                .is_some_and(|slice| {
+                    slice
+                        .iter()
+                        .zip(&expected)
+                        .all(|(a, c)| a.ch == *c && mention_mark(a) == Some(mark))
+                });
             if whole {
                 block.content.extend(run.take());
                 let mut node = Node::new(Kind::Other(MENTION.to_owned()));
                 node.attrs.clone_from(&mark.attrs);
-                node.marks = atom.marks.iter().filter(|m| m.kind != mark.kind).cloned().collect();
+                node.marks = atom
+                    .marks
+                    .iter()
+                    .filter(|m| m.kind != mark.kind)
+                    .cloned()
+                    .collect();
                 block.content.push(node);
                 index += expected.len();
                 continue;
@@ -830,7 +852,11 @@ impl Editor {
     fn unknown_block_between(&self, first: usize, last: usize) -> bool {
         let textblocks = self.textblocks();
         let order = blocks_in_order(&self.doc);
-        let position = |block: usize| order.iter().position(|(path, _)| *path == textblocks[block]);
+        let position = |block: usize| {
+            order
+                .iter()
+                .position(|(path, _)| *path == textblocks[block])
+        };
         let (Some(from), Some(to)) = (position(first), position(last)) else {
             return false;
         };
@@ -962,7 +988,12 @@ impl Editor {
             .into_iter()
             .flatten()
             .filter_map(|index| atoms.get(index))
-            .find_map(|atom| mention_mark(atom).and_then(|m| m.attrs.get("id")).and_then(Value::as_str).map(str::to_owned))
+            .find_map(|atom| {
+                mention_mark(atom)
+                    .and_then(|m| m.attrs.get("id"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
     }
 
     /// Remplace `[start, end)` (par exemple `[[requête`) par une mention de `label` pointant vers
@@ -970,7 +1001,10 @@ impl Editor {
     pub fn insert_mention(&mut self, start: Pos, end: Pos, id: &str, label: &str) {
         self.checkpoint();
         let (start, end) = (self.clamp(start.min(end)), self.clamp(start.max(end)));
-        self.selection = Selection { anchor: start, head: end };
+        self.selection = Selection {
+            anchor: start,
+            head: end,
+        };
         if start != end {
             self.delete_selection_inner();
         }
@@ -981,14 +1015,20 @@ impl Editor {
         let mut attrs = Map::new();
         attrs.insert("id".into(), Value::String(id.to_owned()));
         attrs.insert("label".into(), Value::String(label.to_owned()));
-        attrs.insert("mentionSuggestionChar".into(), Value::String("[[".to_owned()));
+        attrs.insert(
+            "mentionSuggestionChar".into(),
+            Value::String("[[".to_owned()),
+        );
         let inserted = mention_atoms(&attrs, &[]);
         let count = inserted.len();
         let mut atoms = self.atoms(head.block);
         let at = head.offset.min(atoms.len());
         atoms.splice(at..at, inserted);
         self.set_atoms(head.block, &atoms);
-        self.selection = Selection::caret(Pos { block: head.block, offset: at + count });
+        self.selection = Selection::caret(Pos {
+            block: head.block,
+            offset: at + count,
+        });
         self.stored_marks = None;
         self.typing = None;
     }
@@ -1435,13 +1475,26 @@ impl Editor {
         while href_of(end).as_deref() == Some(href.as_str()) {
             end += 1;
         }
-        Some((Pos { block: pos.block, offset: start }, Pos { block: pos.block, offset: end }, href))
+        Some((
+            Pos {
+                block: pos.block,
+                offset: start,
+            },
+            Pos {
+                block: pos.block,
+                offset: end,
+            },
+            href,
+        ))
     }
 
     /// Sélectionne le lien touché par le curseur et retourne son adresse.
     pub fn select_link_at_caret(&mut self) -> Option<String> {
         let (start, end, href) = self.link_at(self.selection.head)?;
-        self.selection = Selection { anchor: start, head: end };
+        self.selection = Selection {
+            anchor: start,
+            head: end,
+        };
         Some(href)
     }
 
