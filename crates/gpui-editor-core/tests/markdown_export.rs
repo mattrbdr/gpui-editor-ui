@@ -190,3 +190,121 @@ fn commonmark_export_keeps_mentions_as_double_brackets() {
     .unwrap();
     assert_eq!(doc.to_markdown(), "Voir [[Procédure]].");
 }
+
+#[test]
+fn trailing_hashes_of_a_heading_survive_a_round_trip() {
+    // Found by the importer property test: "# #" at the end of a heading was read back as the
+    // heading's closing sequence and dropped.
+    for text in ["C# #", "only #", "#", "a ##  ", "issue #12"] {
+        let doc = Node::from_json_str(&format!(
+            r#"{{"type":"doc","content":[{{"type":"heading","attrs":{{"level":2}},"content":[{{"type":"text","text":"{text}"}}]}}]}}"#
+        ))
+        .unwrap();
+        let markdown = doc.to_markdown();
+        let back = Node::from_markdown(&markdown);
+        assert_eq!(
+            back.plain_text(),
+            text.trim_end(),
+            "{text:?} exported as {markdown:?}"
+        );
+    }
+}
+
+#[test]
+fn nested_empty_quotes_export_the_same_way_every_time() {
+    // Found by the importer property test: each export peeled one level off "> > >".
+    let first = Node::from_markdown("---\n> > > \n").to_markdown();
+    let second = Node::from_markdown(&first).to_markdown();
+    assert_eq!(first, "---");
+    assert_eq!(second, first);
+    let quoted = Node::from_markdown("> > text").to_markdown();
+    assert_eq!(quoted, "> > text");
+}
+
+#[test]
+fn a_line_of_hashes_inside_a_paragraph_stays_text() {
+    // Found by the importer property test: a "#" line followed by a line break was not escaped
+    // and came back as an empty heading.
+    let doc = Node::from_json_str(
+        r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"a\n#\n-\nb"}]}]}"#,
+    )
+    .unwrap();
+    let markdown = doc.to_markdown();
+    assert_eq!(
+        Node::from_markdown(&markdown).plain_text(),
+        "a\n#\n-\nb",
+        "{markdown:?}"
+    );
+}
+
+#[test]
+fn code_spans_keep_their_outer_spaces() {
+    // Found by the importer property test: each export lost one space on each side.
+    for code in ["  # ", " a ", " `b` ", "x "] {
+        let doc = Node::from_json_str(&format!(
+            r#"{{"type":"doc","content":[{{"type":"paragraph","content":[{{"type":"text","text":"{code}","marks":[{{"type":"code"}}]}}]}}]}}"#
+        ))
+        .unwrap();
+        let markdown = doc.to_markdown();
+        assert_eq!(
+            Node::from_markdown(&markdown),
+            doc,
+            "{code:?} exported as {markdown:?}"
+        );
+    }
+}
+
+#[test]
+fn image_alt_text_is_escaped_like_text() {
+    // Found by the importer property test: marks inside the alt text changed it on every export.
+    for alt in ["|~~`~~# ", "a *b* _c_", "[x] & y", "&amp;"] {
+        let doc = Node::from_json_str(&format!(
+            r#"{{"type":"doc","content":[{{"type":"image","attrs":{{"src":"a.png","alt":{},"title":null}}}}]}}"#,
+            serde_json::to_string(alt).unwrap()
+        ))
+        .unwrap();
+        let markdown = doc.to_markdown();
+        let back = Node::from_markdown(&markdown);
+        let back_alt = back.content[0].attrs.get("alt").and_then(|v| v.as_str());
+        assert_eq!(back_alt, Some(alt), "{alt:?} exported as {markdown:?}");
+    }
+}
+
+#[test]
+fn a_nested_list_that_cannot_interrupt_a_paragraph_is_set_apart() {
+    // Found by the importer property test: an empty nested item after a paragraph became a
+    // setext heading underline; an ordered list starting at 3 would stay paragraph text.
+    for source in ["- word\n\n  - \n", "- word\n\n  3. three\n"] {
+        let first = Node::from_markdown(source);
+        let markdown = first.to_markdown();
+        assert_eq!(
+            Node::from_markdown(&markdown),
+            first,
+            "{source:?} exported as {markdown:?}"
+        );
+    }
+    // A regular nested list stays tight.
+    assert_eq!(
+        Node::from_markdown("- a\n  - b").to_markdown(),
+        "- a\n  - b"
+    );
+}
+
+#[test]
+fn code_block_languages_are_escaped() {
+    // Found by the importer property test: backslashes in the info string were lost on every
+    // export; a backtick would end a backtick fence's info string.
+    for language in [r"\\[[", "c&amp;", "a`b", "rust"] {
+        let doc = Node::from_json_str(&format!(
+            r#"{{"type":"doc","content":[{{"type":"codeBlock","attrs":{{"language":{}}},"content":[{{"type":"text","text":"x\n~~~"}}]}}]}}"#,
+            serde_json::to_string(language).unwrap()
+        ))
+        .unwrap();
+        let markdown = doc.to_markdown();
+        assert_eq!(
+            Node::from_markdown(&markdown),
+            doc,
+            "{language:?} exported as {markdown:?}"
+        );
+    }
+}
