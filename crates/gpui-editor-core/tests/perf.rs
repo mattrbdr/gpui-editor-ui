@@ -3,26 +3,12 @@
 //! Not part of the regular suite:
 //! `cargo test -p gpui-editor-core --release --test perf -- --ignored --nocapture`
 
-use std::fmt::Write as _;
+#[path = "../benches/common/mod.rs"]
+mod common;
+
 use std::time::{Duration, Instant};
 
 use gpui_editor_core::{Editor, Node, Pos, Selection};
-
-/// About 2,000 text blocks: paragraphs, nested lists, tasks and quotes.
-fn large_markdown() -> String {
-    let mut out = String::new();
-    for section in 0..200 {
-        writeln!(out, "## Section {section}\n").unwrap();
-        out.push_str(
-            "Some **bold** text, some *italic* text and a [link](https://example.com).\n\n",
-        );
-        out.push_str("- First item\n- Second item\n  - Nested item\n\n");
-        out.push_str("- [ ] A task\n- [x] Done\n\n");
-        out.push_str("> A quote\n\n");
-        out.push_str("Closing paragraph of the section.\n\n");
-    }
-    out
-}
 
 fn time(label: &str, run: impl FnOnce()) -> Duration {
     let start = Instant::now();
@@ -35,7 +21,7 @@ fn time(label: &str, run: impl FnOnce()) -> Duration {
 #[test]
 #[ignore = "timing, run explicitly with --ignored --nocapture"]
 fn large_document() {
-    let doc = Node::from_markdown(&large_markdown());
+    let doc = Node::from_markdown(&common::markdown(1_800));
     let mut editor = Editor::new(doc);
     let blocks = editor.block_count();
     println!("text blocks: {blocks}");

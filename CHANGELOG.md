@@ -19,7 +19,15 @@ First release of both crates.
 - Editing engine `Editor`: selection, typing, deletion by grapheme, word and block, Markdown input
   rules, headings, lists, tasks, quotes, code blocks, marks, links, mentions, undo/redo.
 - Undo snapshots share the top-level blocks that did not change; the text block index is cached.
-- Property tests over random editing sequences.
+- Property tests over random editing sequences and over arbitrary Markdown and JSON input;
+  they found and fixed several Markdown round trips that were not stable (heading closing
+  sequences, empty nested quotes, code span spaces, image alt text, code block languages,
+  nested lists after a paragraph) and loose task items imported as plain bullets.
+- Criterion benchmarks (`cargo bench -p gpui-editor-core`) and complexity guards run in CI.
+- A keystroke while typing no longer rebuilds the text block index (O(block) instead of
+  O(document)).
+- `Kind`, `MarkKind`, `Error`, `Flavor` and `BlockCommand` are `#[non_exhaustive]`, so that
+  later versions can add variants; match them with a `_` arm.
 
 ### gpui-editor-ui
 
@@ -31,6 +39,10 @@ First release of both crates.
 - Accessibility through AccessKit: multiline text input with its text, caret and selection; the
   menus are list boxes.
 - `test-support` feature for the `*_for_tests` helpers.
+- `EditorEvent` is `#[non_exhaustive]`. Structs that applications build (`EditorTheme`,
+  `MentionItem`, `EmbedCard`) keep public fields; adding a field to them will be a breaking change.
+- Interaction timing test with a complexity guard (`cargo test -p gpui-editor-ui --release --test
+  perf`).
 
 [Unreleased]: https://github.com/mattrbdr/gpui-editor-ui/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/mattrbdr/gpui-editor-ui/releases/tag/v0.1.0

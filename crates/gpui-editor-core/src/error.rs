@@ -2,6 +2,7 @@ use std::fmt;
 
 /// Failure to parse a JSON document.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// The text is not valid JSON.
     Json(serde_json::Error),

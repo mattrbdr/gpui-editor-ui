@@ -11,6 +11,7 @@ use crate::{Kind, Mark, MarkKind, Node};
 
 /// Markdown variant to produce.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum Flavor {
     /// CommonMark with the GFM extensions (strikethrough, task lists); text is escaped correctly.
     #[default]
@@ -140,10 +141,14 @@ fn block(node: &Node, siblings: &[Node], index: usize, compat: bool) -> String {
                 .filter(|n| *n > 0)
                 .unwrap_or(1);
             let level = if compat { level } else { level.min(6) };
+            let mut text = inline(&node.content, compat);
+            if !compat {
+                escape_closing_sequence(&mut text);
+            }
             format!(
                 "{} {}",
                 "#".repeat(usize::try_from(level).unwrap_or(1)),
-                inline(&node.content, compat)
+                text
             )
         }
         Kind::CodeBlock => code_block(node, compat),
@@ -151,7 +156,13 @@ fn block(node: &Node, siblings: &[Node], index: usize, compat: bool) -> String {
             if node.content.is_empty() {
                 return String::new();
             }
-            blocks(&node.content, compat)
+            let inner = blocks(&node.content, compat);
+            // A quote of empty quotes is empty too; otherwise each export would turn the innermost
+            // empty quote into a `>` line, read back as one more empty quote.
+            if !compat && inner.trim().is_empty() {
+                return String::new();
+            }
+            inner
                 .split('\n')
                 .map(|line| {
                     if line.trim().is_empty() {
@@ -194,7 +205,23 @@ fn code_block(node: &Node, compat: bool) -> String {
             format!("```{language}\n{text}\n```")
         }
     } else {
-        let fence = "`".repeat((longest_backtick_run(&text) + 1).max(3));
+        // The info string is read back with backslash escapes and entities, and a backtick fence
+        // cannot have a backtick in it: fall back to a tilde fence then.
+        let fence_char = if language.contains('`') { '~' } else { '`' };
+        let longest = text
+            .lines()
+            .map(|line| {
+                line.trim_start()
+                    .chars()
+                    .take_while(|c| *c == fence_char)
+                    .count()
+            })
+            .max()
+            .unwrap_or(0);
+        let fence = fence_char
+            .to_string()
+            .repeat((longest_backtick_run(&text).max(longest) + 1).max(3));
+        let language = language.replace('\\', "\\\\").replace('&', "\\&");
         if text.is_empty() {
             format!("{fence}{language}\n{fence}")
         } else {
@@ -213,7 +240,8 @@ fn image(node: &Node, compat: bool) -> String {
         (alt.to_owned(), title.to_owned())
     } else {
         (
-            escape_link_text(alt),
+            // The alt text is read back as inline Markdown: escape it like any text.
+            escape_text(alt, false, false, true),
             title.replace('\\', "\\\\").replace('"', "\\\""),
         )
     };
@@ -227,12 +255,6 @@ fn image(node: &Node, compat: bool) -> String {
     } else {
         format!("![{alt}]({src} \"{title}\")")
     }
-}
-
-fn escape_link_text(text: &str) -> String {
-    text.replace('\\', "\\\\")
-        .replace('[', "\\[")
-        .replace(']', "\\]")
 }
 
 /// Link destination: wrapped in angle brackets if it contains whitespace or unbalanced parentheses.
@@ -276,12 +298,30 @@ fn item_content(item: &Node, compat: bool) -> String {
             continue;
         }
         if index > 0 || !out.is_empty() {
-            let tight = is_list(&child.kind) || child.kind == Kind::CodeBlock;
+            let tight = (is_list(&child.kind) && (compat || can_interrupt_paragraph(&piece)))
+                || child.kind == Kind::CodeBlock;
             out.push_str(if tight { "\n" } else { "\n\n" });
         }
         out.push_str(&piece);
     }
     out
+}
+
+/// Whether an exported list may follow a paragraph line directly: CommonMark does not let a list
+/// interrupt a paragraph when its first item is empty (a lone `-` would underline a heading) or
+/// when it is ordered and does not start at 1.
+fn can_interrupt_paragraph(list: &str) -> bool {
+    let first = list.lines().next().unwrap_or_default().trim_end();
+    let marker_only = first == "-" || first.strip_suffix('.').is_some_and(is_number);
+    let ordered_start = first
+        .split_once(". ")
+        .map(|(number, _)| number)
+        .filter(|number| is_number(number));
+    !marker_only && ordered_start.is_none_or(|number| number == "1")
+}
+
+fn is_number(text: &str) -> bool {
+    !text.is_empty() && text.chars().all(|c| c.is_ascii_digit())
 }
 
 fn list(node: &Node, compat: bool) -> String {
@@ -349,9 +389,12 @@ fn is_entity_at(chars: &[char], at: usize) -> bool {
 }
 
 /// Line start that would become a block marker: returns the index of the character to escape.
-fn block_marker_at(line: &[char], last: bool) -> Option<usize> {
+/// `line_ends` tells whether the Markdown line really ends with `line` (a line break follows, or
+/// the block ends), rather than continuing with the next inline node.
+fn block_marker_at(line: &[char], line_ends: bool) -> Option<usize> {
     let end_or_space = |at: usize| {
-        line.get(at).is_none_or(|c| *c == ' ' || *c == '\t') && (line.get(at).is_some() || last)
+        line.get(at).is_none_or(|c| *c == ' ' || *c == '\t')
+            && (line.get(at).is_some() || line_ends)
     };
     let first = *line.first()?;
     match first {
@@ -377,6 +420,16 @@ fn block_marker_at(line: &[char], last: bool) -> Option<usize> {
     }
 }
 
+/// A heading whose text ends with `#`s after a space (or is only `#`s) would lose them: CommonMark
+/// reads them as the optional closing sequence of the heading. Escapes the first of them.
+fn escape_closing_sequence(text: &mut String) {
+    let trimmed = text.trim_end_matches([' ', '\t']);
+    let run = trimmed.trim_end_matches('#').len();
+    if run < trimmed.len() && (run == 0 || trimmed[..run].ends_with([' ', '\t'])) {
+        text.insert(run, '\\');
+    }
+}
+
 /// Escapes non-code text. `bol` tells whether the text starts a line; `last` whether it ends the
 /// block.
 fn escape_text(text: &str, compat: bool, bol: bool, last: bool) -> String {
@@ -390,9 +443,9 @@ fn escape_text(text: &str, compat: bool, bol: bool, last: bool) -> String {
                 .iter()
                 .position(|c| *c == '\n')
                 .map_or(chars.len(), |p| index + p);
-            let is_last_line = line_end == chars.len() && last;
+            let line_ends = line_end < chars.len() || last;
             escape_at =
-                block_marker_at(&chars[index..line_end], is_last_line).map(|offset| index + offset);
+                block_marker_at(&chars[index..line_end], line_ends).map(|offset| index + offset);
             let spaces = chars[index..line_end]
                 .iter()
                 .take_while(|c| **c == ' ')
@@ -482,7 +535,12 @@ fn delimiters(mark: &Mark, compat: bool, html: bool, code_text: &str) -> (String
         MarkKind::Code if html => tags("code"),
         MarkKind::Code => {
             let fence = "`".repeat(shortest_unused_backtick_run(code_text));
-            let pad = if code_text.starts_with('`') || code_text.ends_with('`') {
+            // CommonMark strips one space on each side of a span that starts and ends with one.
+            let spaced = !compat
+                && code_text.starts_with(' ')
+                && code_text.ends_with(' ')
+                && !code_text.chars().all(|c| c == ' ');
+            let pad = if code_text.starts_with('`') || code_text.ends_with('`') || spaced {
                 " "
             } else {
                 ""

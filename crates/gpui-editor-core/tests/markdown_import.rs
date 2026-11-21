@@ -157,3 +157,15 @@ fn export_then_import_is_stable_in_both_flavors() {
         assert_eq!(second, first, "{flavor:?}");
     }
 }
+
+#[test]
+fn a_task_with_several_blocks_stays_a_task() {
+    // Found by the importer property test: in a loose item the task marker was ignored, turning
+    // the task into a plain bullet and dropping its checkbox.
+    let doc = Node::from_markdown("- [x] done\n\n  > with a quote\n- [ ] next");
+    let json = doc.to_json_string();
+    assert!(json.contains(r#""type":"taskList""#), "{json}");
+    assert!(json.contains(r#""checked":true"#), "{json}");
+    assert!(json.contains(r#""checked":false"#), "{json}");
+    assert_eq!(Node::from_markdown(&doc.to_markdown()), doc);
+}

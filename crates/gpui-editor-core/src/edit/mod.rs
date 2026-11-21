@@ -79,6 +79,7 @@ struct Snapshot {
 
 /// Block type that can be inserted (`/` menu).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BlockCommand {
     /// Turns the block into a `paragraph`.
     Paragraph,
@@ -210,6 +211,12 @@ impl Editor {
     /// Mutable access to the node at `path`: only its top-level block stops being shared.
     fn node_mut(&mut self, path: &[usize]) -> &mut Node {
         self.index.take();
+        self.unshared_mut(path)
+    }
+
+    /// Like [`Editor::node_mut`] for a change that keeps every text block where it is (the inline
+    /// content of a text block): the text block index stays valid.
+    fn unshared_mut(&mut self, path: &[usize]) -> &mut Node {
         match path.first() {
             Some(&top) if self.aligned => {
                 if let Some(entry) = self.shared.get_mut(top) {
@@ -238,8 +245,9 @@ impl Editor {
     }
 
     fn set_atoms(&mut self, block: usize, atoms: &[Atom]) {
+        // Only the inline content changes: the text blocks keep their paths.
         let path = self.path_of(block);
-        rebuild(self.node_mut(&path), atoms);
+        rebuild(self.unshared_mut(&path), atoms);
     }
 
     /// Text of the block (a line break for each hard break).

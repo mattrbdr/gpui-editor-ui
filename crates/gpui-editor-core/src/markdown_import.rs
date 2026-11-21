@@ -233,14 +233,22 @@ impl Builder {
     }
 
     fn task_item(&mut self, checked: bool) {
-        let len = self.stack.len();
-        if len >= 2 && self.stack[len - 1].kind == Kind::ListItem {
-            self.stack[len - 1].kind = Kind::TaskItem;
-            self.stack[len - 1]
+        // In a tight item the marker comes right after the item starts; in a loose item (several
+        // blocks), inside its first paragraph.
+        let mut item = self.stack.len().saturating_sub(1);
+        if item > 0
+            && self.stack[item].kind == Kind::Paragraph
+            && self.stack[item].content.is_empty()
+        {
+            item -= 1;
+        }
+        if item >= 1 && self.stack[item].kind == Kind::ListItem {
+            self.stack[item].kind = Kind::TaskItem;
+            self.stack[item]
                 .attrs
                 .insert("checked".into(), Value::Bool(checked));
-            if self.stack[len - 2].kind == Kind::BulletList {
-                self.stack[len - 2].kind = Kind::TaskList;
+            if self.stack[item - 1].kind == Kind::BulletList {
+                self.stack[item - 1].kind = Kind::TaskList;
             }
         }
     }

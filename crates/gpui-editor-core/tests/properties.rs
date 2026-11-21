@@ -5,7 +5,7 @@
 
 use gpui_editor_core::{Editor, Kind, MarkKind, Node, Pos, Selection};
 use proptest::prelude::*;
-use proptest::test_runner::{Config, TestRunner};
+use proptest::test_runner::{Config, RngAlgorithm, TestRng, TestRunner};
 
 /// Starting documents: Markdown structures, an unknown block, a mention, an inline atom.
 fn seeds() -> Vec<Node> {
@@ -211,13 +211,24 @@ fn run(seed: &Node, ops: &[Op]) -> Result<(), TestCaseError> {
     Ok(())
 }
 
-fn search(cases: u32) {
-    let seeds = seeds();
-    let mut runner = TestRunner::new(Config {
+/// A runner over `cases` cases. The regular runs (256 cases) use a fixed seed, so that CI always
+/// checks the same sequences; the long searches draw new ones each time.
+fn runner(cases: u32) -> TestRunner {
+    let config = Config {
         cases,
         failure_persistence: None,
         ..Config::default()
-    });
+    };
+    if cases <= 256 {
+        TestRunner::new_with_rng(config, TestRng::deterministic_rng(RngAlgorithm::ChaCha))
+    } else {
+        TestRunner::new(config)
+    }
+}
+
+fn search(cases: u32) {
+    let seeds = seeds();
+    let mut runner = runner(cases);
     let strategy = (0..seeds.len(), prop::collection::vec(op(), 1..60));
     runner
         .run(&strategy, |(seed, ops)| run(&seeds[seed], &ops))
@@ -233,4 +244,141 @@ fn random_edits_keep_the_document_valid() {
 #[ignore = "long search, run explicitly with --ignored"]
 fn random_edits_keep_the_document_valid_long() {
     search(10_000);
+}
+
+// --- Importers: arbitrary input ---
+
+/// Markdown-heavy text: block and inline syntax, entities, HTML, accents and emoji.
+fn markdown_text() -> impl Strategy<Value = String> {
+    let piece = prop_oneof![
+        Just("# ".to_owned()),
+        Just("## ".to_owned()),
+        Just("- ".to_owned()),
+        Just("1. ".to_owned()),
+        Just("- [ ] ".to_owned()),
+        Just("> ".to_owned()),
+        Just("```".to_owned()),
+        Just("---".to_owned()),
+        Just("**".to_owned()),
+        Just("*".to_owned()),
+        Just("_".to_owned()),
+        Just("~~".to_owned()),
+        Just("`".to_owned()),
+        Just("[".to_owned()),
+        Just("](".to_owned()),
+        Just(")".to_owned()),
+        Just("![".to_owned()),
+        Just("|".to_owned()),
+        Just("\\".to_owned()),
+        Just("&amp;".to_owned()),
+        Just("<u>".to_owned()),
+        Just("\n".to_owned()),
+        Just("\n\n".to_owned()),
+        Just("  ".to_owned()),
+        Just("\t".to_owned()),
+        Just("word".to_owned()),
+        Just("é".to_owned()),
+        Just("🇫🇷".to_owned()),
+        Just("1".to_owned()),
+    ];
+    prop::collection::vec(piece, 0..80).prop_map(|pieces| pieces.concat())
+}
+
+/// JSON values shaped like ProseMirror nodes, with wrong types and unknown names mixed in.
+fn json_node() -> impl Strategy<Value = serde_json::Value> {
+    use serde_json::{Value, json};
+    let name = prop_oneof![
+        Just(json!("doc")),
+        Just(json!("paragraph")),
+        Just(json!("heading")),
+        Just(json!("text")),
+        Just(json!("bulletList")),
+        Just(json!("listItem")),
+        Just(json!("taskItem")),
+        Just(json!("codeBlock")),
+        Just(json!("hardBreak")),
+        Just(json!("mention")),
+        Just(json!("somethingNew")),
+        Just(json!(42)),
+        Just(Value::Null),
+    ];
+    let scalar = prop_oneof![
+        Just(Value::Null),
+        Just(json!(true)),
+        Just(json!(3)),
+        Just(json!("s")),
+        Just(json!([])),
+        Just(json!({})),
+        Just(json!({"level": 2, "checked": true, "href": "https://example.com"})),
+    ];
+    let leaf = (
+        name.clone(),
+        scalar.clone(),
+        prop::option::of("[a-zé ]{0,6}"),
+    )
+        .prop_map(|(name, attrs, text)| {
+            let mut node = json!({"type": name, "attrs": attrs});
+            if let Some(text) = text {
+                node["text"] = json!(text);
+            }
+            node
+        });
+    leaf.prop_recursive(4, 40, 5, move |inner| {
+        (
+            name.clone(),
+            scalar.clone(),
+            prop::collection::vec(inner.clone(), 0..5),
+            prop::collection::vec(inner, 0..2),
+            any::<bool>(),
+        )
+            .prop_map(|(name, attrs, content, marks, keys_reversed)| {
+                if keys_reversed {
+                    json!({"marks": marks, "content": content, "attrs": attrs, "type": name})
+                } else {
+                    json!({"type": name, "attrs": attrs, "content": content, "marks": marks})
+                }
+            })
+    })
+}
+
+fn import_search(cases: u32) {
+    let mut runner = runner(cases);
+    runner
+        .run(&markdown_text(), |source| {
+            let first = Node::from_markdown(&source).to_markdown();
+            let second = Node::from_markdown(&first).to_markdown();
+            let third = Node::from_markdown(&second).to_markdown();
+            prop_assert_eq!(&second, &third, "export not stable for {:?}", source);
+            Ok(())
+        })
+        .unwrap();
+    runner
+        .run(&json_node(), |value| {
+            let source = value.to_string();
+            if let Ok(node) = Node::from_json_str(&source) {
+                let written = node.to_json_string();
+                let reread = Node::from_json_str(&written)
+                    .map_err(|error| TestCaseError::fail(format!("{error}: {written}")))?;
+                prop_assert_eq!(&reread, &node, "JSON round trip of {}", source);
+                prop_assert_eq!(reread.to_json_string(), written);
+                let _ = node.to_markdown();
+                let _ = node.plain_text();
+                let mut editor = Editor::new(node);
+                editor.select_all();
+                editor.insert_text("x");
+            }
+            Ok(())
+        })
+        .unwrap();
+}
+
+#[test]
+fn importers_never_panic_and_round_trip() {
+    import_search(256);
+}
+
+#[test]
+#[ignore = "long search, run explicitly with --ignored"]
+fn importers_never_panic_and_round_trip_long() {
+    import_search(10_000);
 }

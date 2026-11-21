@@ -29,6 +29,8 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy -p gpui-editor-core --all-targets
       - run: cargo test -p gpui-editor-core
+      # Complexity guards: costs must not grow faster than the document (release only).
+      - run: cargo test -p gpui-editor-core --release --test scaling -- --nocapture --test-threads=1
       - run: cargo doc -p gpui-editor-core --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
@@ -52,6 +54,8 @@ jobs:
       # Library alone, without the test-support feature that the tests enable.
       - run: cargo clippy -p gpui-editor-ui
       - run: cargo test -p gpui-editor-ui
+      # Interaction cost on 100 to 2,000 blocks, rendering included, with a complexity guard.
+      - run: cargo test -p gpui-editor-ui --release --test perf -- --nocapture
       - run: cargo build -p gpui-editor-ui --example spike
       - run: cargo doc --workspace --no-deps
         env:

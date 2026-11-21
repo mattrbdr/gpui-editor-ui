@@ -119,9 +119,37 @@ Try it: `cargo run -p gpui-editor-ui --example spike [file.md]`
 Known limits: unknown nodes and inline images are shown as a `[name]` marker (they are kept in the
 document), list and quote structure is not exposed to assistive technology yet, and
 IME composition is tested through the input-handler API rather than with a real ibus keyboard.
-Every block is laid out on each frame (no virtualization): typing in a 500-block document costs
-about 3 ms per keystroke in release, rendering included, so this is left until a real document
-needs it.
+Every block is laid out on each frame (no virtualization): documents up to about 500 blocks stay
+within a frame, longer ones lag while typing (see [Performance](#performance)).
+
+## Performance
+
+Release builds, 4-core Xeon @ 2.10 GHz (shared VM, ±30%). Full tables, method and before/after in
+[docs/performance.md](docs/performance.md).
+
+| Core operation | 100 blocks | 1,000 blocks | 5,000 blocks |
+|---|---:|---:|---:|
+| Parse Markdown | 0.08 ms | 0.87 ms | 5.7 ms |
+| Parse JSON | 0.32 ms | 3.2 ms | 18.5 ms |
+| Export Markdown | 0.10 ms | 0.68 ms | 4.3 ms |
+| Keystroke while typing | 1.2 µs | 3.8 µs | 6.0 µs |
+| Enter (new block, undo step) | 31 µs | 0.29 ms | 1.5 ms |
+| Undo + redo | 25 µs | 0.25 ms | 1.4 ms |
+
+| Editor component (update + layout + paint) | 100 blocks | 500 blocks | 2,000 blocks |
+|---|---:|---:|---:|
+| Keystroke | 2 ms | 9–10 ms | 42–65 ms |
+| Caret move | 1.6 ms | 9–10 ms | 45–60 ms |
+
+Typing and moving the caret cost the same whatever the document size in the core; operations that
+change the document's structure are linear. In the component, GPUI lays out every block on each
+frame, which dominates beyond a few hundred blocks.
+
+CI guards the growth rather than the absolute times: the complexity tests fail if an operation on
+a document 4× larger costs more than 10× as much (3× for operations local to the caret's block).
+Reproduce with `cargo bench -p gpui-editor-core`,
+`cargo test -p gpui-editor-core --release --test scaling -- --nocapture --test-threads=1` and
+`cargo test -p gpui-editor-ui --release --test perf -- --nocapture`.
 
 ## Markdown
 
@@ -153,11 +181,12 @@ let tiptap = doc.to_markdown_with(&MarkdownOptions { flavor: Flavor::TipTapCompa
 ```sh
 cargo test --workspace
 cargo clippy --workspace --all-targets   # pedantic, zero warnings expected
+cargo bench -p gpui-editor-core          # criterion benchmarks, see docs/performance.md
 ```
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy, the tests and the docs of the core on stable and
-on the 1.89 `rust-version`, and clippy, the tests, the example, the docs and
-`cargo publish --workspace --dry-run` of the UI crate on stable. Changes are listed in
+CI (`.github/workflows/ci.yml`) runs fmt, clippy, the tests, the complexity guards and the docs of
+the core on stable and on the 1.89 `rust-version`, and clippy, the tests, the interaction timing
+test, the example, the docs and `cargo publish --workspace --dry-run` of the UI crate on stable. Changes are listed in
 [CHANGELOG.md](CHANGELOG.md).
 
 Property tests run random editing sequences against the engine's invariants (256 per run; a longer

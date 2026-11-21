@@ -305,32 +305,6 @@ fn up_and_down_move_between_blocks_keeping_the_column(cx: &mut TestAppContext) {
     assert_eq!(caret(cx, window).head.block, 0);
 }
 
-#[gpui::test]
-fn typing_in_a_large_document_stays_responsive(cx: &mut TestAppContext) {
-    // ~20 KB: well beyond the largest real document measured (18 KB).
-    let paragraphs: Vec<String> = (0..500)
-        .map(|i| format!("Paragraphe numéro {i} avec un peu de texte pour remplir."))
-        .collect();
-    let refs: Vec<&str> = paragraphs.iter().map(String::as_str).collect();
-    let window = open(cx, doc(&refs));
-    set_caret(cx, window, 250, 5);
-    let started = std::time::Instant::now();
-    for _ in 0..100 {
-        cx.simulate_input(any(window), "x");
-    }
-    let elapsed = started.elapsed();
-    assert!(
-        texts(cx, window)[250].starts_with("Paragxxxxxxxxxx"),
-        "{}",
-        texts(cx, window)[250]
-    );
-    assert!(
-        elapsed < std::time::Duration::from_secs(20),
-        "100 keystrokes in {elapsed:?}"
-    );
-    eprintln!("100 keystrokes in a 500-block document: {elapsed:?}");
-}
-
 fn open_empty(cx: &mut TestAppContext) -> WindowHandle<EditorView> {
     open(cx, doc(&[""]))
 }
