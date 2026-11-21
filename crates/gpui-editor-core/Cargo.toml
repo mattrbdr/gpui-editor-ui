@@ -12,5 +12,8 @@ pulldown-cmark = { version = "0.13", default-features = false }
 unicode-segmentation = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 
+[dev-dependencies]
+proptest = { version = "1", default-features = false, features = ["std"] }
+
 [lints]
 workspace = true
