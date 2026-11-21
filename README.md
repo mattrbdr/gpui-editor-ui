@@ -155,8 +155,13 @@ cargo test --workspace
 cargo clippy --workspace --all-targets   # pedantic, zero warnings expected
 ```
 
-CI (`.github/workflows/ci.yml`) runs fmt, clippy and the tests of the core on stable and on the
-1.89 `rust-version`, and clippy, the tests and the example of the UI crate on stable.
+CI (`.github/workflows/ci.yml`) runs fmt, clippy, the tests and the docs of the core on stable and
+on the 1.89 `rust-version`, and clippy, the tests, the example, the docs and
+`cargo publish --workspace --dry-run` of the UI crate on stable. Changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
+
+Property tests run random editing sequences against the engine's invariants (256 per run; a longer
+search with `cargo test -p gpui-editor-core --release --test properties -- --ignored`).
 
 The `*_for_tests` helpers of `EditorView` (simulated mouse, scroll and caret state) are only
 compiled with the `test-support` feature, which the crate's own tests enable.

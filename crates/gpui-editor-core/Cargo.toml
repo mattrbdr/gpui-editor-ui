@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+documentation = "https://docs.rs/gpui-editor-core"
+readme = "README.md"
+keywords = ["prosemirror", "tiptap", "markdown", "rich-text", "editor"]
+categories = ["text-editors", "parser-implementations", "data-structures"]
 
 [dependencies]
 pulldown-cmark = { version = "0.13", default-features = false }

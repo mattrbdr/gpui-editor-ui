@@ -29,6 +29,9 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy -p gpui-editor-core --all-targets
       - run: cargo test -p gpui-editor-core
+      - run: cargo doc -p gpui-editor-core --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
 
   ui:
     runs-on: ubuntu-latest
@@ -50,3 +53,8 @@ jobs:
       - run: cargo clippy -p gpui-editor-ui
       - run: cargo test -p gpui-editor-ui
       - run: cargo build -p gpui-editor-ui --example spike
+      - run: cargo doc --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      # Packages both crates as crates.io would and builds them from the packages.
+      - run: cargo publish --workspace --dry-run
