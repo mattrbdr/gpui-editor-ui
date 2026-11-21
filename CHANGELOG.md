@@ -41,6 +41,8 @@ First release of both crates.
 - `test-support` feature for the `*_for_tests` helpers.
 - `EditorEvent` is `#[non_exhaustive]`. Structs that applications build (`EditorTheme`,
   `MentionItem`, `EmbedCard`) keep public fields; adding a field to them will be a breaking change.
+- Windowed rendering: only the top-level blocks near the visible area are laid out, the others
+  keep their measured height (keystroke at 2,000 blocks: 42–65 ms → 4.7 ms).
 - Interaction timing test with a complexity guard (`cargo test -p gpui-editor-ui --release --test
   perf`).
 

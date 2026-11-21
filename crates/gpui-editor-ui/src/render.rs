@@ -7,13 +7,14 @@ use gpui::{
     HighlightStyle, Hsla, MouseButton, ObjectFit, ParentElement, PathBuilder, Render, Role,
     Stateful, StatefulInteractiveElement, StrikethroughStyle, Styled, StyledImage, StyledText,
     TextLayout, Toggled, UnderlineStyle, Window, canvas, deferred, div, fill, img, point,
-    prelude::*, px,
+    prelude::*, px, rems,
 };
-use gpui_editor_core::{Kind, MarkKind, Node};
+use gpui_editor_core::{Kind, MarkKind, Node, Pos};
 
 use crate::{
     a11y, keys,
     view::{EditorView, Marked, chars_to_bytes},
+    visible,
 };
 
 /// Appearance of a text block.
@@ -164,7 +165,7 @@ impl EditorView {
         &self,
         node: &Node,
         counter: &mut usize,
-        layouts: &mut Vec<TextLayout>,
+        layouts: &mut Vec<Option<TextLayout>>,
         look: BlockLook,
         cx: &Context<Self>,
     ) -> AnyElement {
@@ -187,7 +188,7 @@ impl EditorView {
             text
         };
         let shaped = StyledText::new(shown).with_highlights(styles);
-        layouts.push(shaped.layout().clone());
+        layouts.push(Some(shaped.layout().clone()));
         let mut element = div()
             .w_full()
             .min_h(line_height)
@@ -434,7 +435,7 @@ impl EditorView {
         &self,
         nodes: &[Node],
         counter: &mut usize,
-        layouts: &mut Vec<TextLayout>,
+        layouts: &mut Vec<Option<TextLayout>>,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         nodes
@@ -448,7 +449,7 @@ impl EditorView {
         &self,
         node: &Node,
         counter: &mut usize,
-        layouts: &mut Vec<TextLayout>,
+        layouts: &mut Vec<Option<TextLayout>>,
         cx: &Context<Self>,
     ) -> AnyElement {
         let theme = &self.theme;
@@ -508,7 +509,7 @@ impl EditorView {
         &self,
         node: &Node,
         counter: &mut usize,
-        layouts: &mut Vec<TextLayout>,
+        layouts: &mut Vec<Option<TextLayout>>,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let theme = &self.theme;
@@ -635,7 +636,7 @@ impl EditorView {
         &self,
         list: &Node,
         counter: &mut usize,
-        layouts: &mut Vec<TextLayout>,
+        layouts: &mut Vec<Option<TextLayout>>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = &self.theme;
@@ -805,6 +806,81 @@ fn overlay(cx: &Context<EditorView>, selection: Hsla, caret_color: Hsla) -> AnyE
 }
 
 impl EditorView {
+    /// The top-level blocks. Those near the visible area (one viewport above and below), those
+    /// holding the caret or the selection anchor, and those never laid out are rendered and their
+    /// height recorded; the others are empty boxes of their last height (see [`crate::visible`]).
+    fn build_document(
+        &self,
+        window: &Window,
+        counter: &mut usize,
+        layouts: &mut Vec<Option<TextLayout>>,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let children = &self.editor.doc().content;
+        let keys: Vec<u64> = children.iter().map(visible::node_key).collect();
+        let viewport = self.scroll.bounds();
+        // Before the first layout the viewport is unknown: render everything once.
+        let windowed = viewport.size.height > px(0.0);
+        let cached: Vec<Option<gpui::Pixels>> = {
+            let mut heights = self.heights.borrow_mut();
+            if windowed {
+                heights.set_width(viewport.size.width);
+            }
+            heights.retain(&keys);
+            keys.iter().map(|key| heights.get(*key)).collect()
+        };
+        let selection = self.editor.selection();
+        let gap = rems(0.5).to_pixels(window.rem_size());
+        let (low, high) = (
+            viewport.top() - viewport.size.height,
+            viewport.bottom() + viewport.size.height,
+        );
+        let mut top =
+            viewport.top() + self.scroll.offset().y + rems(1.0).to_pixels(window.rem_size());
+        let mut elements = Vec::with_capacity(children.len());
+        for ((child, key), height) in children.iter().zip(keys).zip(cached) {
+            let first = *counter;
+            let count = visible::text_block_count(child);
+            let holds = |pos: Pos| (first..first + count).contains(&pos.block);
+            let far = height.is_some_and(|height| top + height < low || top > high);
+            if windowed && far && !holds(selection.head) && !holds(selection.anchor) {
+                *counter += count;
+                layouts.extend(std::iter::repeat_n(None, count));
+                elements.push(
+                    div()
+                        .w_full()
+                        .flex_none()
+                        .h(height.unwrap_or_default())
+                        .into_any_element(),
+                );
+            } else if let Some(element) = self.build_node(child, counter, layouts, cx) {
+                let heights = self.heights.clone();
+                let measure = canvas(
+                    move |bounds, _, _| heights.borrow_mut().record(key, bounds.size.height),
+                    |_, (), _, _| {},
+                )
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full();
+                // A flex wrapper: its height includes its child's margins (no margin collapsing).
+                elements.push(
+                    div()
+                        .relative()
+                        .w_full()
+                        .flex_none()
+                        .flex()
+                        .flex_col()
+                        .child(element)
+                        .child(measure)
+                        .into_any_element(),
+                );
+            }
+            top += height.unwrap_or_default() + gap;
+        }
+        elements
+    }
+
     /// Exposes the editor to assistive technology: a multiline text input whose text runs (one per
     /// block) and selection are only built while assistive technology is connected.
     fn accessible(
@@ -846,8 +922,7 @@ impl Render for EditorView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut layouts = Vec::new();
         let mut counter = 0;
-        let blocks =
-            self.build_children(&self.editor.doc().content, &mut counter, &mut layouts, cx);
+        let blocks = self.build_document(window, &mut counter, &mut layouts, cx);
         self.layouts = layouts;
         let overlay = overlay(cx, self.theme.selection, self.theme.caret);
 

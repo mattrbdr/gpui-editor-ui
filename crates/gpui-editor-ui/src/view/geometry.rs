@@ -21,10 +21,12 @@ impl EditorView {
         if !self.ready() {
             return None;
         }
+        // Blocks outside the laid-out area cannot be under the pointer.
         let block = self
             .layouts
             .iter()
             .enumerate()
+            .filter_map(|(index, layout)| Some((index, layout.as_ref()?)))
             .min_by(|(_, a), (_, b)| {
                 let distance = |layout: &TextLayout| {
                     let bounds = layout.bounds();
@@ -41,7 +43,7 @@ impl EditorView {
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|(index, _)| index)?;
-        let bytes = match self.layouts[block].index_for_position(position) {
+        let bytes = match self.layouts[block].as_ref()?.index_for_position(position) {
             Ok(bytes) | Err(bytes) => bytes,
         };
         let text = self.editor.block_text(block);
@@ -55,7 +57,9 @@ impl EditorView {
         if !self.ready() {
             return None;
         }
-        self.layouts[pos.block].position_for_index(self.block_bytes(pos.block, pos.offset))
+        self.layouts[pos.block]
+            .as_ref()?
+            .position_for_index(self.block_bytes(pos.block, pos.offset))
     }
 
     /// Caret rectangle (for painting and for the IME candidate window).
@@ -64,7 +68,7 @@ impl EditorView {
         let origin = self.caret_point(head)?;
         Some(Bounds::new(
             origin,
-            size(px(1.5), self.layouts[head.block].line_height()),
+            size(px(1.5), self.layouts[head.block].as_ref()?.line_height()),
         ))
     }
 
@@ -78,7 +82,10 @@ impl EditorView {
         let (start, end) = (selection.start(), selection.end());
         let mut quads = Vec::new();
         for block in start.block..=end.block {
-            let layout = &self.layouts[block];
+            // Blocks outside the laid-out area are not visible: nothing to paint.
+            let Some(layout) = &self.layouts[block] else {
+                continue;
+            };
             let len = self.editor.block_len(block);
             let from = if block == start.block {
                 start.offset

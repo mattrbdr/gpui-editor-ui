@@ -1,9 +1,9 @@
 //! Interaction cost on large documents, rendering included, and a complexity guard.
 //!
 //! Each interaction is followed by `run_until_parked`, so the time includes the editor's update,
-//! the layout of every block and the paint. The guard checks that typing in a document 4x larger
-//! costs at most 10x more (linear: 4x to 7x here, quadratic: about 16x). It only runs in release
-//! builds:
+//! the layout of the blocks near the visible area and the paint. Only those are laid out (windowed
+//! rendering), so a keystroke in a document 4x larger must cost at most 3.5x more (about 1.8x
+//! measured; laying out every block gave 4x to 7x). It only runs in release builds:
 //! `cargo test -p gpui-editor-ui --release --test perf -- --nocapture`
 
 use std::fmt::Write as _;
@@ -126,7 +126,7 @@ fn interactions_on_large_documents(cx: &mut TestAppContext) {
     let ratio = large.keystroke.as_secs_f64() / medium.keystroke.as_secs_f64();
     println!("keystroke: x{ratio:.2} for 4x the blocks");
     assert!(
-        ratio <= 10.0,
-        "typing grows faster than linearly: x{ratio:.2}"
+        ratio <= 3.5,
+        "typing grows with the document: x{ratio:.2} (is every block laid out again?)"
     );
 }

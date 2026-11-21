@@ -733,3 +733,65 @@ fn the_dark_theme_is_dark_and_keeps_the_default_fonts() {
     assert_eq!(dark.font_family, light.font_family);
     assert_eq!(dark.font_size, light.font_size);
 }
+
+#[gpui::test]
+fn long_documents_only_lay_out_the_blocks_near_the_viewport(cx: &mut TestAppContext) {
+    let lines: Vec<String> = (0..2_000)
+        .map(|i| format!("Paragraph {i} with some text to lay out."))
+        .collect();
+    let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let window = open(cx, doc(&refs));
+    let read = |cx: &mut TestAppContext| {
+        window
+            .read_with(cx, |view, _| {
+                (
+                    view.laid_out_blocks_for_tests(),
+                    view.scroll_max_for_tests(),
+                    view.scroll_viewport_bottom_for_tests(),
+                )
+            })
+            .unwrap()
+    };
+    // The first frame lays everything out once to measure it.
+    let (_, full_height, _) = read(cx);
+    window.update(cx, |_, _, cx| cx.notify()).unwrap();
+    cx.run_until_parked();
+    let (laid_out, height, bottom) = read(cx);
+    assert!(laid_out > 0 && laid_out < 400, "{laid_out} blocks laid out");
+    assert_eq!(height, full_height, "the boxes keep the document's height");
+
+    // Ctrl+End reaches a block that was not laid out and shows the caret.
+    cx.simulate_keystrokes(any(window), "ctrl-end");
+    cx.run_until_parked();
+    // The scroll requested while painting takes effect on the next frame.
+    window.update(cx, |_, _, cx| cx.notify()).unwrap();
+    cx.run_until_parked();
+    let (top, _) = window
+        .read_with(cx, |view, _| view.block_origin_for_tests(1_999))
+        .unwrap()
+        .expect("the caret's block is laid out");
+    assert!(
+        top >= px(0.0) && top < bottom,
+        "caret block at {top:?}, viewport ends at {bottom:?}"
+    );
+    cx.simulate_input(any(window), "!");
+    assert!(texts(cx, window)[1_999].ends_with("out.!"));
+
+    // Back to the start, and down by pages: the caret stays in laid-out blocks.
+    cx.simulate_keystrokes(any(window), "ctrl-home");
+    cx.run_until_parked();
+    for _ in 0..3 {
+        window.update(cx, |_, _, cx| cx.notify()).unwrap();
+        cx.run_until_parked();
+        cx.simulate_keystrokes(any(window), "pagedown");
+        cx.run_until_parked();
+    }
+    let head = caret(cx, window).head;
+    assert!(head.block > 20, "three pages down: block {}", head.block);
+    let origin = window
+        .read_with(cx, |view, _| view.block_origin_for_tests(head.block))
+        .unwrap();
+    assert!(origin.is_some(), "the caret's block is laid out");
+    let (_, height, _) = read(cx);
+    assert_eq!(height, full_height, "editing kept the measured heights");
+}
