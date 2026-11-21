@@ -147,32 +147,36 @@ pub struct MentionItem {
 
 /// `/` menu commands: label, search keywords, effect.
 pub(crate) const SLASH_COMMANDS: [(&str, &str, BlockCommand); 10] = [
-    ("Text", "texte paragraphe text", BlockCommand::Paragraph),
-    ("Heading 1", "titre heading h1 #", BlockCommand::Heading(1)),
-    ("Heading 2", "titre heading h2 ##", BlockCommand::Heading(2)),
+    ("Text", "text paragraph", BlockCommand::Paragraph),
+    ("Heading 1", "heading title h1 #", BlockCommand::Heading(1)),
+    ("Heading 2", "heading title h2 ##", BlockCommand::Heading(2)),
     (
         "Heading 3",
-        "titre heading h3 ###",
+        "heading title h3 ###",
         BlockCommand::Heading(3),
     ),
     (
         "Bulleted list",
-        "liste puces bullet ul -",
+        "bulleted list bullet ul -",
         BlockCommand::BulletList,
     ),
     (
         "Numbered list",
-        "liste numerotee ordered ol 1.",
+        "numbered list ordered ol 1.",
         BlockCommand::OrderedList,
     ),
     (
         "Task list",
-        "liste taches todo checkbox [ ]",
+        "task list todo checkbox [ ]",
         BlockCommand::TaskList,
     ),
-    ("Quote", "citation quote >", BlockCommand::Quote),
-    ("Code block", "code bloc ```", BlockCommand::CodeBlock),
-    ("Divider", "separateur ligne hr ---", BlockCommand::Rule),
+    ("Quote", "quote blockquote >", BlockCommand::Quote),
+    ("Code block", "code block ```", BlockCommand::CodeBlock),
+    (
+        "Divider",
+        "divider rule separator hr ---",
+        BlockCommand::Rule,
+    ),
 ];
 
 /// Editing component: a document, its selection and its history.

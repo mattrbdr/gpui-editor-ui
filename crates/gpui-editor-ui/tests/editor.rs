@@ -389,7 +389,7 @@ fn typing_a_slash_opens_a_filterable_menu_and_enter_applies_the_command(cx: &mut
     cx.simulate_input(any(window), "/");
     assert!(slash_open(cx, window));
     assert_eq!(slash_items(cx, window).len(), 10);
-    cx.simulate_input(any(window), "tit");
+    cx.simulate_input(any(window), "head");
     assert_eq!(
         slash_items(cx, window),
         ["Heading 1", "Heading 2", "Heading 3"]
@@ -404,7 +404,7 @@ fn typing_a_slash_opens_a_filterable_menu_and_enter_applies_the_command(cx: &mut
     cx.simulate_input(any(window), "Deux");
     assert_eq!(markdown(cx, window), "## Deux");
     cx.simulate_keystrokes(any(window), "ctrl-z ctrl-z");
-    assert_eq!(texts(cx, window), ["/tit"]);
+    assert_eq!(texts(cx, window), ["/head"]);
 }
 
 #[gpui::test]
