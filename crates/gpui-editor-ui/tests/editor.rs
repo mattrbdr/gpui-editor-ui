@@ -280,7 +280,7 @@ fn clicking_places_the_caret_and_dragging_selects(cx: &mut TestAppContext) {
     let (second_top, left) = window
         .read_with(cx, |view, _| view.block_origin_for_tests(1))
         .unwrap()
-        .expect("la mise en page doit exister");
+        .expect("the layout should exist");
     let mut vcx = VisualTestContext::from_window(any(window), cx);
     vcx.simulate_click(
         point(left + px(1.0), second_top + px(4.0)),
@@ -307,7 +307,7 @@ fn up_and_down_move_between_blocks_keeping_the_column(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn typing_in_a_large_document_stays_responsive(cx: &mut TestAppContext) {
-    // ~20 Ko : bien au-delà du plus gros document réel mesuré (18 Ko).
+    // ~20 KB: well beyond the largest real document measured (18 KB).
     let paragraphs: Vec<String> = (0..500)
         .map(|i| format!("Paragraphe numéro {i} avec un peu de texte pour remplir."))
         .collect();
@@ -326,9 +326,9 @@ fn typing_in_a_large_document_stays_responsive(cx: &mut TestAppContext) {
     );
     assert!(
         elapsed < std::time::Duration::from_secs(20),
-        "100 frappes en {elapsed:?}"
+        "100 keystrokes in {elapsed:?}"
     );
-    eprintln!("100 frappes dans un document de 500 blocs : {elapsed:?}");
+    eprintln!("100 keystrokes in a 500-block document: {elapsed:?}");
 }
 
 fn open_empty(cx: &mut TestAppContext) -> WindowHandle<EditorView> {
@@ -366,7 +366,7 @@ fn markdown_typed_through_the_input_handler_is_converted(cx: &mut TestAppContext
         "## Titre\n\n- un\n- **gras** et `code`"
     );
     cx.simulate_keystrokes(any(window), "ctrl-z");
-    // Annuler remet le texte tel que tapé juste avant la dernière conversion.
+    // Undo restores the text as typed just before the last conversion.
     assert!(
         texts(cx, window).last().unwrap().contains("`code`")
             || texts(cx, window).last().unwrap().contains("code")
@@ -390,7 +390,10 @@ fn typing_a_slash_opens_a_filterable_menu_and_enter_applies_the_command(cx: &mut
     assert!(slash_open(cx, window));
     assert_eq!(slash_items(cx, window).len(), 10);
     cx.simulate_input(any(window), "tit");
-    assert_eq!(slash_items(cx, window), ["Titre 1", "Titre 2", "Titre 3"]);
+    assert_eq!(
+        slash_items(cx, window),
+        ["Heading 1", "Heading 2", "Heading 3"]
+    );
     cx.simulate_keystrokes(any(window), "down enter");
     assert!(!slash_open(cx, window));
     let kind = window
@@ -418,11 +421,11 @@ fn the_slash_menu_closes_on_escape_backspace_or_a_space_and_never_opens_mid_word
     cx.simulate_keystrokes(any(window), "backspace");
     assert!(!slash_open(cx, window));
     cx.simulate_input(any(window), "/ab ");
-    assert!(!slash_open(cx, window), "un espace ferme le menu");
+    assert!(!slash_open(cx, window), "a space closes the menu");
     let window = open(cx, doc(&["http:"]));
     set_caret(cx, window, 0, 5);
     cx.simulate_input(any(window), "/");
-    assert!(!slash_open(cx, window), "pas de menu au milieu d'un mot");
+    assert!(!slash_open(cx, window), "no menu in the middle of a word");
 }
 
 #[gpui::test]
@@ -465,7 +468,7 @@ fn the_copy_button_puts_the_code_block_text_on_the_clipboard(cx: &mut TestAppCon
     assert_eq!(
         window.read_with(cx, |view, _| view.copied_block()).unwrap(),
         None,
-        "l'état « Copié » disparaît seul"
+        "the \"Copied\" state clears by itself"
     );
 }
 
@@ -500,14 +503,14 @@ fn double_brackets_open_a_menu_that_reports_queries_and_inserts_a_mention(cx: &m
     cx.simulate_input(any(window), "voir [");
     assert!(
         !window.read_with(cx, |v, _| v.mention_open()).unwrap(),
-        "un seul crochet n'ouvre rien"
+        "a single bracket opens nothing"
     );
     cx.simulate_input(any(window), "[");
     assert!(window.read_with(cx, |v, _| v.mention_open()).unwrap());
     assert_eq!(
         *queries.borrow(),
         [""],
-        "la requête vide est signalée à l'ouverture"
+        "the empty query is reported on opening"
     );
     cx.simulate_input(any(window), "al");
     assert_eq!(*queries.borrow(), ["", "a", "al"]);
@@ -542,14 +545,14 @@ fn the_mention_menu_closes_on_escape_a_closing_bracket_or_when_the_caret_leaves(
     cx.simulate_input(any(window), " [[x]");
     assert!(
         !window.read_with(cx, |v, _| v.mention_open()).unwrap(),
-        "un crochet fermant ferme le menu"
+        "a closing bracket closes the menu"
     );
     let reopened = open_empty(cx);
     cx.simulate_input(any(reopened), "[[x");
     cx.simulate_keystrokes(any(reopened), "left left left");
     assert!(
         !reopened.read_with(cx, |v, _| v.mention_open()).unwrap(),
-        "le curseur est sorti de la requête"
+        "the caret left the query"
     );
 }
 
@@ -576,7 +579,7 @@ fn ctrl_click_on_a_mention_reports_its_target_but_a_plain_click_only_moves_the_c
     let (top, left) = window
         .read_with(cx, |view, _| view.block_origin_for_tests(0))
         .unwrap()
-        .expect("mise en page");
+        .expect("layout");
     let origin = point(left + px(24.0), top + px(6.0));
     let mut vcx = VisualTestContext::from_window(any(window), cx);
     vcx.simulate_click(
@@ -591,7 +594,7 @@ fn ctrl_click_on_a_mention_reports_its_target_but_a_plain_click_only_moves_the_c
     assert_eq!(
         clicks.borrow().len(),
         1,
-        "un clic simple ne suit pas le lien"
+        "a plain click does not follow the link"
     );
 }
 
@@ -605,17 +608,14 @@ fn moving_the_caret_far_down_scrolls_it_into_view(cx: &mut TestAppContext) {
             .read_with(cx, |view, _| view.scroll_offset_y())
             .unwrap()
     };
-    assert_eq!(offset(cx), px(0.0), "au début, rien n'a défilé");
+    assert_eq!(offset(cx), px(0.0), "nothing has scrolled at the start");
     cx.simulate_keystrokes(any(window), "ctrl-end");
     cx.run_until_parked();
-    assert!(
-        offset(cx) < px(0.0),
-        "ctrl-fin doit faire défiler vers le curseur"
-    );
+    assert!(offset(cx) < px(0.0), "ctrl-end should scroll to the caret");
     let scrolled = offset(cx);
     cx.simulate_keystrokes(any(window), "ctrl-home");
     cx.run_until_parked();
-    assert!(offset(cx) > scrolled, "ctrl-début doit remonter");
+    assert!(offset(cx) > scrolled, "ctrl-home should scroll back up");
 }
 
 #[gpui::test]
@@ -630,9 +630,9 @@ fn the_caret_blinks_only_while_focused_and_resets_on_typing(cx: &mut TestAppCont
     cx.executor()
         .advance_clock(std::time::Duration::from_millis(540));
     cx.run_until_parked();
-    assert!(!visible(cx), "le curseur s'éteint après une demi-période");
+    assert!(!visible(cx), "the caret turns off after a half-period");
     cx.simulate_input(any(window), "x");
-    assert!(visible(cx), "taper le rallume aussitôt");
+    assert!(visible(cx), "typing turns it back on immediately");
 }
 
 #[gpui::test]
@@ -643,12 +643,12 @@ fn page_down_and_page_up_move_the_caret_by_a_screenful(cx: &mut TestAppContext) 
     set_caret(cx, window, 0, 0);
     cx.simulate_keystrokes(any(window), "pagedown");
     let down = caret(cx, window).head.block;
-    assert!(
-        down > 3,
-        "pagedown doit sauter plusieurs lignes, obtenu {down}"
-    );
+    assert!(down > 3, "pagedown should skip several lines, got {down}");
     cx.simulate_keystrokes(any(window), "pageup");
-    assert!(caret(cx, window).head.block < down, "pageup doit remonter");
+    assert!(
+        caret(cx, window).head.block < down,
+        "pageup should move back up"
+    );
 }
 
 #[gpui::test]
@@ -665,11 +665,11 @@ fn dragging_below_the_viewport_scrolls_and_extends_the_selection(cx: &mut TestAp
         })
         .unwrap();
     cx.run_until_parked();
-    assert!(moved, "le pointeur sous la zone visible fait défiler");
+    assert!(moved, "a pointer below the visible area scrolls");
     assert!(window.read_with(cx, |v, _| v.scroll_offset_y()).unwrap() < px(0.0));
     assert!(
         caret(cx, window).head.block > 0,
-        "la sélection s'étend vers le bas"
+        "the selection extends downward"
     );
     assert_eq!(caret(cx, window).anchor.block, 0);
 }
@@ -688,17 +688,17 @@ fn ctrl_k_asks_for_a_link_and_apply_link_sets_it(cx: &mut TestAppContext) {
         })
         .detach();
     });
-    set_caret(cx, window, 0, 9); // dans « page »
+    set_caret(cx, window, 0, 9); // inside "page"
     cx.simulate_keystrokes(any(window), "ctrl-k");
     assert_eq!(
         requests.borrow().as_slice(),
         [None],
-        "pas encore de lien : demande vide"
+        "no link yet: empty request"
     );
     assert_eq!(
         caret(cx, window).start().offset..caret(cx, window).end().offset,
         8..12,
-        "le mot est sélectionné"
+        "the word is selected"
     );
     window
         .update(cx, |view, _, cx| {

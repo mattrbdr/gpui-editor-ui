@@ -1,15 +1,15 @@
-//! Fenêtre d'essai de l'éditeur : `cargo run -p gpui-editor-ui --example spike [fichier.md]`.
+//! Editor test window: `cargo run -p gpui-editor-ui --example spike [file.md]`.
 
 use gpui::{App, Bounds, WindowBounds, WindowOptions, prelude::*, px, size};
 use gpui_editor_core::Node;
 use gpui_editor_ui::{EditorTheme, EditorView, bind_keys};
 
-const SAMPLE: &str = "# Éditeur à blocs\n\nTapez ici : accents (é, è, ç), touches mortes, **gras** (Ctrl+B), *italique* (Ctrl+I), `code` (Ctrl+E) et [liens](https://example.com).\n\n## Listes\n\n- Premier élément\n- Deuxième élément\n  - Imbriqué (Tab / Maj+Tab)\n\n1. Un\n2. Deux\n\n- [ ] À faire (Ctrl+Entrée coche)\n- [x] Fait\n\n> Une citation sur\n> plusieurs lignes.\n\n```js\nconst a = 1;\nconsole.log(a);\n```\n\n---\n\nFin du document. Raccourcis : Ctrl+Alt+1/2/3 titres, Ctrl+Maj+8/7/9 listes, Ctrl+Z / Ctrl+Maj+Z annuler et rétablir.";
+const SAMPLE: &str = "# Block editor\n\nType here: accented characters (é, è, ç), dead keys, **bold** (Ctrl+B), *italic* (Ctrl+I), `code` (Ctrl+E) and [links](https://example.com).\n\n## Lists\n\n- First item\n- Second item\n  - Nested (Tab / Shift+Tab)\n\n1. One\n2. Two\n\n- [ ] To do (Ctrl+Enter checks it)\n- [x] Done\n\n> A quote spanning\n> several lines.\n\n```js\nconst a = 1;\nconsole.log(a);\n```\n\n---\n\nEnd of document. Shortcuts: Ctrl+Alt+1/2/3 headings, Ctrl+Shift+8/7/9 lists, Ctrl+Z / Ctrl+Shift+Z undo and redo.";
 
 fn main() {
     let source = std::env::args().nth(1).map_or_else(
         || SAMPLE.to_owned(),
-        |path| std::fs::read_to_string(path).expect("fichier illisible"),
+        |path| std::fs::read_to_string(path).expect("unreadable file"),
     );
     gpui_platform::application().run(move |cx: &mut App| {
         bind_keys(cx);
@@ -31,7 +31,7 @@ fn main() {
                     })
                 },
             )
-            .expect("fenêtre");
+            .expect("failed to open window");
         window
             .update(cx, |view, window, cx| {
                 view.focus(window, cx);

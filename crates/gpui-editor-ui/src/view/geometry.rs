@@ -6,7 +6,7 @@ use gpui_editor_core::Pos;
 use super::{EditorView, bytes_to_chars, chars_to_bytes};
 
 impl EditorView {
-    // --- Géométrie ---
+    // --- Geometry ---
 
     pub(super) fn ready(&self) -> bool {
         self.painted && self.layouts.len() == self.editor.block_count()
@@ -16,7 +16,7 @@ impl EditorView {
         chars_to_bytes(&self.editor.block_text(block), chars)
     }
 
-    /// Position la plus proche d'un point de la fenêtre.
+    /// Closest position to a point in the window.
     pub(crate) fn hit_test(&self, position: Point<Pixels>) -> Option<Pos> {
         if !self.ready() {
             return None;
@@ -58,7 +58,7 @@ impl EditorView {
         self.layouts[pos.block].position_for_index(self.block_bytes(pos.block, pos.offset))
     }
 
-    /// Rectangle du curseur (pour le dessin et la fenêtre de candidats de l'IME).
+    /// Caret rectangle (for painting and for the IME candidate window).
     pub(crate) fn caret_bounds(&self) -> Option<Bounds<Pixels>> {
         let head = self.editor.selection().head;
         let origin = self.caret_point(head)?;
@@ -68,7 +68,7 @@ impl EditorView {
         ))
     }
 
-    /// Rectangles de la sélection, ligne visuelle par ligne visuelle.
+    /// Selection rectangles, one visual line at a time.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub(crate) fn selection_quads(&self) -> Vec<Bounds<Pixels>> {
         let selection = self.editor.selection();

@@ -8,9 +8,9 @@ use crate::keys;
 use super::{EditorEvent, EditorView, EmbedCard, MentionItem, MentionMenu, SLASH_COMMANDS, Slash};
 
 impl EditorView {
-    // --- Menu `/` ---
+    // --- `/` menu ---
 
-    /// Texte tapé après le `/` (filtre du menu).
+    /// Text typed after the `/` (menu filter).
     pub(super) fn slash_query(&self) -> Option<String> {
         let slash = self.slash?;
         let head = self.editor.selection().head;
@@ -26,7 +26,7 @@ impl EditorView {
         })
     }
 
-    /// Commandes correspondant au filtre.
+    /// Commands matching the filter.
     pub(crate) fn slash_items(&self) -> Vec<(&'static str, BlockCommand)> {
         let query = self.slash_query().unwrap_or_default().to_lowercase();
         SLASH_COMMANDS
@@ -40,7 +40,7 @@ impl EditorView {
             .collect()
     }
 
-    /// Libellés des commandes proposées (tests et intégrations).
+    /// Labels of the offered commands (tests and integrations).
     #[must_use]
     #[cfg(feature = "test-support")]
     pub fn slash_items_for_tests(&self) -> Vec<String> {
@@ -50,13 +50,13 @@ impl EditorView {
             .collect()
     }
 
-    /// Le menu `/` est-il ouvert ?
+    /// Whether the `/` menu is open.
     #[must_use]
     pub fn slash_open(&self) -> bool {
         self.slash.is_some()
     }
 
-    /// Ferme le menu s'il n'a plus de raison d'être (curseur ailleurs, espace tapé, `/` effacé).
+    /// Closes the menu once it no longer applies (caret moved away, space typed, `/` deleted).
     pub(super) fn sync_slash(&mut self) {
         let Some(mut slash) = self.slash else { return };
         match self.slash_query() {
@@ -70,7 +70,7 @@ impl EditorView {
         }
     }
 
-    /// Ouvre le menu quand un `/` vient d'être tapé en début de mot (hors bloc de code).
+    /// Opens the menu when a `/` was just typed at the start of a word (outside code blocks).
     pub(super) fn maybe_open_slash(&mut self) {
         let selection = self.editor.selection();
         let head = selection.head;
@@ -92,7 +92,7 @@ impl EditorView {
         }
     }
 
-    /// Applique la commande `index` du menu : retire `/filtre` puis convertit le bloc.
+    /// Applies menu command `index`: removes `/filter` then converts the block.
     pub(crate) fn run_slash(&mut self, index: usize, cx: &mut Context<Self>) {
         let (Some(slash), Some((_, command))) =
             (self.slash, self.slash_items().get(index).copied())
@@ -122,7 +122,7 @@ impl EditorView {
         }
     }
 
-    /// Déplace la ligne choisie du menu ; `false` si le menu n'est pas ouvert.
+    /// Moves the selected menu row; `false` if the menu is not open.
     pub(super) fn slash_step(&mut self, delta: isize, cx: &mut Context<Self>) -> bool {
         let count = self.slash_items().len();
         let Some(slash) = self.slash.as_mut() else {
@@ -136,9 +136,9 @@ impl EditorView {
         true
     }
 
-    // --- Menu `[[` ---
+    // --- `[[` menu ---
 
-    /// Texte tapé après `[[` tant que le menu reste pertinent.
+    /// Text typed after `[[`, as long as the menu still applies.
     pub(super) fn mention_query_now(&self) -> Option<String> {
         let menu = self.mention?;
         let head = self.editor.selection().head;
@@ -154,7 +154,7 @@ impl EditorView {
         (opened && !query.contains([']', '\n']) && query.chars().count() <= 80).then_some(query)
     }
 
-    /// Ouvre le menu quand `[[` vient d'être tapé (hors bloc de code).
+    /// Opens the menu when `[[` was just typed (outside code blocks).
     pub(super) fn maybe_open_mention(&mut self) {
         let selection = self.editor.selection();
         let head = selection.head;
@@ -176,7 +176,7 @@ impl EditorView {
         }
     }
 
-    /// Ferme le menu hors contexte ; sinon signale la nouvelle requête à l'application.
+    /// Closes the menu when out of context; otherwise reports the new query to the application.
     pub(super) fn sync_mention(&mut self, cx: &mut Context<Self>) {
         if self.mention.is_none() {
             return;
@@ -195,7 +195,7 @@ impl EditorView {
         }
     }
 
-    /// Cibles à proposer dans le menu `[[` (réponse à [`EditorEvent::MentionQuery`]).
+    /// Targets to offer in the `[[` menu (response to [`EditorEvent::MentionQuery`]).
     pub fn set_mention_items(&mut self, items: Vec<MentionItem>, cx: &mut Context<Self>) {
         if self.mention.is_some() {
             self.mention_items = items;
@@ -208,7 +208,7 @@ impl EditorView {
         }
     }
 
-    /// Aperçus à afficher à la place des blocs inconnus qui portent un attribut `viewId`.
+    /// Previews to show in place of unknown blocks that carry a `viewId` attribute.
     pub fn set_embeds(
         &mut self,
         embeds: std::collections::HashMap<String, EmbedCard>,
@@ -218,13 +218,13 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Le menu `[[` est-il ouvert ?
+    /// Whether the `[[` menu is open.
     #[must_use]
     pub fn mention_open(&self) -> bool {
         self.mention.is_some()
     }
 
-    /// Insère la cible `index` du menu à la place de `[[requête`.
+    /// Inserts menu target `index` in place of `[[query`.
     pub(crate) fn run_mention(&mut self, index: usize, cx: &mut Context<Self>) {
         let (Some(menu), Some(item)) = (self.mention, self.mention_items.get(index).cloned())
         else {

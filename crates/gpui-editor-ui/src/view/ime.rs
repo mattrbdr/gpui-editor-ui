@@ -8,7 +8,7 @@ use gpui_editor_core::{Pos, Selection};
 use super::{EditorView, Marked, chars_to_utf16, utf16_len, utf16_to_chars};
 
 impl EditorView {
-    // --- Décalages UTF-16 globaux (texte du document, blocs séparés par un saut de ligne) ---
+    // --- Global UTF-16 offsets (document text, blocks separated by a newline) ---
 
     pub(super) fn global_utf16(&self, pos: Pos) -> usize {
         let before: usize = (0..pos.block)

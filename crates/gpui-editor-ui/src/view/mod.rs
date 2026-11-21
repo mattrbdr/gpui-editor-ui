@@ -1,4 +1,4 @@
-//! État de l'éditeur GPUI : sélection, souris, presse-papiers, IME.
+//! GPUI editor state: selection, mouse, clipboard, IME.
 
 mod actions;
 mod geometry;
@@ -16,7 +16,7 @@ use gpui_editor_core::{BlockCommand, Editor, Node};
 #[cfg(feature = "test-support")]
 use gpui_editor_core::{Pos, Selection};
 
-/// Couleurs, polices et tailles de l'éditeur.
+/// Editor colors, fonts and sizes.
 #[derive(Debug, Clone)]
 pub struct EditorTheme {
     pub font_family: SharedString,
@@ -52,25 +52,25 @@ impl Default for EditorTheme {
     }
 }
 
-/// Événement émis par l'éditeur.
+/// Event emitted by the editor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditorEvent {
-    /// Le contenu du document a changé.
+    /// The document content changed.
     Changed,
-    /// Le texte tapé après `[[` a changé : l'application répond par
+    /// The text typed after `[[` changed: the application responds with
     /// [`EditorView::set_mention_items`].
     MentionQuery(String),
-    /// Ctrl+clic sur une mention : identifiant de sa cible (par exemple `document:<uuid>`).
+    /// Ctrl+click on a mention: the identifier of its target (for example `document:<uuid>`).
     MentionClicked(String),
-    /// Ctrl+K : l'application doit demander l'adresse d'un lien. Contient l'adresse actuelle si le
-    /// curseur est dans un lien (qui est alors sélectionné en entier), sinon `None` (le mot sous le curseur
-    /// est sélectionné s'il n'y a pas de sélection). Répondre par [`EditorView::apply_link`].
+    /// Ctrl+K: the application should ask for a link URL. Contains the current URL if the caret
+    /// is inside a link (which is then selected in full), otherwise `None` (the word under the
+    /// caret is selected if there is no selection). Respond with [`EditorView::apply_link`].
     LinkRequested(Option<String>),
-    /// Ctrl+clic sur un lien : son adresse.
+    /// Ctrl+click on a link: its URL.
     LinkClicked(String),
 }
 
-/// Texte en cours de composition (IME), dans un seul bloc ; décalages en caractères.
+/// Text being composed (IME), within a single block; offsets in characters.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Marked {
     pub block: usize,
@@ -78,7 +78,7 @@ pub(crate) struct Marked {
     pub end: usize,
 }
 
-/// Menu `/` ouvert : bloc concerné, décalage du `/` et ligne choisie.
+/// Open `/` menu: target block, offset of the `/` and selected row.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Slash {
     pub block: usize,
@@ -86,8 +86,8 @@ pub(crate) struct Slash {
     pub selected: usize,
 }
 
-/// Aperçu d'un bloc inconnu (par exemple une vue de base de données), fourni par l'application :
-/// titre, sous-titre et petit tableau.
+/// Preview of an unknown block (for example a database view), provided by the application:
+/// title, subtitle and a small table.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EmbedCard {
     pub title: String,
@@ -96,7 +96,7 @@ pub struct EmbedCard {
     pub rows: Vec<Vec<String>>,
 }
 
-/// Menu `[[` ouvert : bloc concerné, décalage des `[[` et ligne choisie.
+/// Open `[[` menu: target block, offset of the `[[` and selected row.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct MentionMenu {
     pub block: usize,
@@ -104,44 +104,48 @@ pub(crate) struct MentionMenu {
     pub selected: usize,
 }
 
-/// Cible proposée par le menu `[[` (fournie par l'application).
+/// Target offered by the `[[` menu (provided by the application).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MentionItem {
-    /// Identifiant stocké dans la mention (par exemple `document:<uuid>`).
+    /// Identifier stored in the mention (for example `document:<uuid>`).
     pub id: String,
-    /// Titre affiché dans le texte.
+    /// Title shown in the text.
     pub title: String,
-    /// Détail affiché sous le titre (chemin, aperçu).
+    /// Detail shown below the title (path, preview).
     pub detail: String,
 }
 
-/// Commandes du menu `/` : libellé, mots-clés de recherche, effet.
+/// `/` menu commands: label, search keywords, effect.
 pub(crate) const SLASH_COMMANDS: [(&str, &str, BlockCommand); 10] = [
-    ("Texte", "texte paragraphe text", BlockCommand::Paragraph),
-    ("Titre 1", "titre heading h1 #", BlockCommand::Heading(1)),
-    ("Titre 2", "titre heading h2 ##", BlockCommand::Heading(2)),
-    ("Titre 3", "titre heading h3 ###", BlockCommand::Heading(3)),
+    ("Text", "texte paragraphe text", BlockCommand::Paragraph),
+    ("Heading 1", "titre heading h1 #", BlockCommand::Heading(1)),
+    ("Heading 2", "titre heading h2 ##", BlockCommand::Heading(2)),
     (
-        "Liste à puces",
+        "Heading 3",
+        "titre heading h3 ###",
+        BlockCommand::Heading(3),
+    ),
+    (
+        "Bulleted list",
         "liste puces bullet ul -",
         BlockCommand::BulletList,
     ),
     (
-        "Liste numérotée",
+        "Numbered list",
         "liste numerotee ordered ol 1.",
         BlockCommand::OrderedList,
     ),
     (
-        "Liste de tâches",
+        "Task list",
         "liste taches todo checkbox [ ]",
         BlockCommand::TaskList,
     ),
-    ("Citation", "citation quote >", BlockCommand::Quote),
-    ("Bloc de code", "code bloc ```", BlockCommand::CodeBlock),
-    ("Séparateur", "separateur ligne hr ---", BlockCommand::Rule),
+    ("Quote", "citation quote >", BlockCommand::Quote),
+    ("Code block", "code bloc ```", BlockCommand::CodeBlock),
+    ("Divider", "separateur ligne hr ---", BlockCommand::Rule),
 ];
 
-/// Composant d'édition : un document, sa sélection et son historique.
+/// Editing component: a document, its selection and its history.
 #[allow(clippy::struct_excessive_bools)]
 pub struct EditorView {
     pub(crate) editor: Editor,
@@ -156,26 +160,26 @@ pub struct EditorView {
     pub(crate) mention: Option<MentionMenu>,
     pub(crate) mention_items: Vec<MentionItem>,
     mention_query: String,
-    /// Aperçus des blocs inconnus, par valeur de leur attribut `viewId`.
+    /// Previews of unknown blocks, keyed by the value of their `viewId` attribute.
     pub(crate) embeds: std::collections::HashMap<String, EmbedCard>,
-    /// Bloc de code dont le bouton « Copier » vient d'être utilisé.
+    /// Code block whose "Copy" button was just used.
     pub(crate) copied: Option<usize>,
-    /// Défilement vertical du document.
+    /// Vertical scrolling of the document.
     pub(crate) scroll: ScrollHandle,
-    /// Le prochain dessin doit ramener le curseur dans la zone visible.
+    /// The next paint must scroll the caret back into view.
     pub(crate) reveal_caret: bool,
-    /// Phase visible du clignotement du curseur.
+    /// Visible phase of the caret blink.
     pub(crate) caret_visible: bool,
-    /// L'éditeur avait le focus au dernier dessin (le clignotement s'arrête sans focus).
+    /// The editor had focus at the last paint (blinking stops without focus).
     pub(crate) focused: bool,
-    /// La boucle de défilement automatique de la sélection tourne déjà.
+    /// The selection autoscroll loop is already running.
     autoscrolling: bool,
     _blink: Task<()>,
 }
 
-/// Demi-période du clignotement du curseur.
+/// Half-period of the caret blink.
 const BLINK_INTERVAL: Duration = Duration::from_millis(530);
-/// Marge (px) gardée autour du curseur lorsqu'on le ramène dans la zone visible.
+/// Margin (px) kept around the caret when scrolling it back into view.
 const REVEAL_MARGIN: f32 = 24.0;
 
 impl EventEmitter<EditorEvent> for EditorView {}
@@ -186,7 +190,7 @@ impl Focusable for EditorView {
     }
 }
 
-// --- Conversions de décalages -----------------------------------------------------------------
+// --- Offset conversions -----------------------------------------------------------------------
 
 fn utf16_len(text: &str) -> usize {
     text.encode_utf16().count()
@@ -220,7 +224,7 @@ fn utf16_to_chars(text: &str, utf16: usize) -> usize {
 }
 
 impl EditorView {
-    /// Ouvre un document.
+    /// Opens a document.
     pub fn new(doc: Node, theme: EditorTheme, cx: &mut Context<Self>) -> Self {
         Self {
             editor: Editor::new(doc),
@@ -259,13 +263,13 @@ impl EditorView {
         }
     }
 
-    /// Le curseur vient de bouger : le montrer sans attendre le clignotement et le ramener dans la vue.
+    /// The caret just moved: show it without waiting for the blink and scroll it into view.
     fn caret_moved(&mut self) {
         self.caret_visible = true;
         self.reveal_caret = true;
     }
 
-    /// Ramène le curseur dans la zone visible du défilement ; vrai si le défilement a changé.
+    /// Scrolls the caret back into the visible area; returns true if the scroll offset changed.
     pub(crate) fn reveal_caret_now(&mut self) -> bool {
         if !std::mem::take(&mut self.reveal_caret) {
             return false;
@@ -290,32 +294,32 @@ impl EditorView {
         true
     }
 
-    /// Phase visible du clignotement (tests et intégrations).
+    /// Visible phase of the blink (tests and integrations).
     #[must_use]
     #[cfg(feature = "test-support")]
     pub fn caret_visible_for_tests(&self) -> bool {
         self.caret_visible
     }
 
-    /// Décalage vertical du défilement (tests et intégrations).
+    /// Vertical scroll offset (tests and integrations).
     #[must_use]
     pub fn scroll_offset_y(&self) -> Pixels {
         self.scroll.offset().y
     }
 
-    /// Document courant.
+    /// Current document.
     #[must_use]
     pub fn doc(&self) -> &Node {
         self.editor.doc()
     }
 
-    /// Moteur d'édition (lecture : sélection, état des marques, historique…).
+    /// Editing engine (read-only: selection, mark state, history...).
     #[must_use]
     pub fn editor(&self) -> &Editor {
         &self.editor
     }
 
-    /// Remplace le document (l'historique est effacé).
+    /// Replaces the document (the history is cleared).
     pub fn set_doc(&mut self, doc: Node, cx: &mut Context<Self>) {
         self.editor = Editor::new(doc);
         self.marked = None;
@@ -328,13 +332,13 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Donne le focus clavier à l'éditeur.
+    /// Gives keyboard focus to the editor.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
         window.focus(&self.focus_handle, cx);
     }
 
     pub(crate) fn changed(&mut self, cx: &mut Context<Self>) {
-        // Les dispositions de texte datent d'avant la modification : plus de `hit_test` dessus avant le prochain dessin.
+        // The text layouts predate the change: no `hit_test` on them until the next paint.
         self.painted = false;
         self.goal_x = None;
         self.caret_moved();
@@ -344,21 +348,21 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Place le curseur sans passer par la souris ni le clavier (tests et intégrations).
+    /// Places the caret without going through the mouse or keyboard (tests and integrations).
     #[cfg(feature = "test-support")]
     pub fn set_caret_for_tests(&mut self, pos: Pos, cx: &mut Context<Self>) {
         self.editor.set_selection(Selection::caret(pos));
         cx.notify();
     }
 
-    /// Fixe la sélection (tests et intégrations).
+    /// Sets the selection (tests and integrations).
     #[cfg(feature = "test-support")]
     pub fn select_for_tests(&mut self, selection: Selection, cx: &mut Context<Self>) {
         self.editor.set_selection(selection);
         cx.notify();
     }
 
-    /// Haut et bord gauche du bloc de texte `block`, une fois l'éditeur dessiné.
+    /// Top and left edge of the text block `block`, once the editor has been painted.
     #[must_use]
     #[cfg(feature = "test-support")]
     pub fn block_origin_for_tests(&self, block: usize) -> Option<(Pixels, Pixels)> {
@@ -369,7 +373,7 @@ impl EditorView {
         Some((bounds.top(), bounds.left()))
     }
 
-    /// Copie le texte du bloc de code `block` dans le presse-papiers (bouton « Copier »).
+    /// Copies the text of the code block `block` to the clipboard ("Copy" button).
     pub fn copy_code_block(&mut self, block: usize, cx: &mut Context<Self>) {
         if block >= self.editor.block_count() {
             return;
@@ -392,7 +396,7 @@ impl EditorView {
         .detach();
     }
 
-    /// Bloc dont le bouton « Copier » est dans l'état « Copié » (tests et intégrations).
+    /// Block whose "Copy" button is in the "Copied" state (tests and integrations).
     #[must_use]
     pub fn copied_block(&self) -> Option<usize> {
         self.copied

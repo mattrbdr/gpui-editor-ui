@@ -8,7 +8,7 @@ use crate::keys;
 use super::{EditorEvent, EditorView};
 
 impl EditorView {
-    // --- Actions : navigation ---
+    // --- Actions: navigation ---
 
     pub(super) fn nav(&mut self, cx: &mut Context<Self>, run: impl FnOnce(&mut Editor)) {
         run(&mut self.editor);
@@ -147,7 +147,7 @@ impl EditorView {
         self.nav(cx, Editor::select_all);
     }
 
-    /// Déplacement vertical d'une ligne visuelle, en gardant la colonne de départ.
+    /// Moves one visual line up or down, keeping the starting column.
     pub(super) fn vertical(&mut self, direction: f32, extend: bool, cx: &mut Context<Self>) {
         let head = self.editor.selection().head;
         let Some(origin) = self.caret_point(head) else {
@@ -178,7 +178,7 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Déplace le curseur d'une « page » (hauteur visible moins une ligne), en gardant la colonne.
+    /// Moves the caret by one "page" (visible height minus one line), keeping the column.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub(super) fn page(&mut self, direction: f32, extend: bool, cx: &mut Context<Self>) {
         let head = self.editor.selection().head;
@@ -254,7 +254,7 @@ impl EditorView {
         self.vertical(1.0, true, cx);
     }
 
-    // --- Actions : édition ---
+    // --- Actions: editing ---
 
     pub(super) fn edit(&mut self, cx: &mut Context<Self>, run: impl FnOnce(&mut Editor)) {
         run(&mut self.editor);
@@ -348,7 +348,7 @@ impl EditorView {
         cx.notify();
     }
 
-    /// Pose (`Some`) ou retire (`None`) le lien sur la sélection courante ; réponse à
+    /// Sets (`Some`) or removes (`None`) the link on the current selection; response to
     /// [`EditorEvent::LinkRequested`].
     pub fn apply_link(&mut self, href: Option<&str>, cx: &mut Context<Self>) {
         self.edit(cx, |e| e.set_link(href));
@@ -437,7 +437,7 @@ impl EditorView {
         });
     }
 
-    // --- Presse-papiers ---
+    // --- Clipboard ---
 
     pub(crate) fn on_copy(&mut self, _: &keys::Copy, _: &mut Window, cx: &mut Context<Self>) {
         if !self.editor.selection().is_collapsed() {

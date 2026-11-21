@@ -10,7 +10,7 @@ use gpui::{
 use super::{EditorEvent, EditorView};
 
 impl EditorView {
-    // --- Souris ---
+    // --- Mouse ---
 
     pub(crate) fn on_mouse_down(
         &mut self,
@@ -71,9 +71,9 @@ impl EditorView {
         self.selecting = false;
     }
 
-    /// Un pas de défilement automatique : le pointeur est au-delà du bord haut ou bas de la zone visible
-    /// pendant une sélection. Fait défiler (vitesse proportionnelle à la distance) et étend la sélection
-    /// jusqu'au bord. Retourne vrai si le défilement a bougé.
+    /// One autoscroll step: the pointer is past the top or bottom edge of the visible area during
+    /// a selection. Scrolls (at a speed proportional to the distance) and extends the selection to
+    /// the edge. Returns true if the scroll offset moved.
     pub(crate) fn autoscroll_step(&mut self, mouse: Point<Pixels>, cx: &mut Context<Self>) -> bool {
         if !self.selecting {
             return false;
@@ -104,7 +104,7 @@ impl EditorView {
         moved
     }
 
-    /// Lance (une seule fois) la boucle qui fait défiler pendant qu'on glisse la souris hors de la zone.
+    /// Starts (only once) the loop that scrolls while the mouse is dragged outside the viewport.
     pub(super) fn start_autoscroll(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.autoscrolling {
             return;
@@ -132,20 +132,20 @@ impl EditorView {
         .detach();
     }
 
-    /// Un pas de défilement automatique avec un pointeur simulé (tests et intégrations).
+    /// One autoscroll step with a simulated pointer (tests and integrations).
     #[cfg(feature = "test-support")]
     pub fn autoscroll_for_tests(&mut self, mouse: Point<Pixels>, cx: &mut Context<Self>) -> bool {
         self.autoscroll_step(mouse, cx)
     }
 
-    /// Bord bas de la zone visible (tests et intégrations).
+    /// Bottom edge of the visible area (tests and integrations).
     #[must_use]
     #[cfg(feature = "test-support")]
     pub fn scroll_viewport_bottom_for_tests(&self) -> Pixels {
         self.scroll.bounds().bottom()
     }
 
-    /// Commence une sélection à la souris (tests et intégrations).
+    /// Starts a mouse selection (tests and integrations).
     #[cfg(feature = "test-support")]
     pub fn begin_selection_for_tests(&mut self) {
         self.selecting = true;
