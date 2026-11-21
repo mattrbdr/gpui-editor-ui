@@ -1,6 +1,6 @@
 use gpui_editor_core::{Error, Kind, MarkKind, Node};
 
-/// Document au format canonique de ProseMirror (`type`, `attrs`, `content`, `marks`, `text`).
+/// Document in canonical ProseMirror key order (`type`, `attrs`, `content`, `marks`, `text`).
 const DOC: &str = r#"{"type":"doc","content":[{"type":"heading","attrs":{"level":2,"textAlign":"center"},"content":[{"type":"text","text":"Titre"}]},{"type":"paragraph","attrs":{"textAlign":null},"content":[{"type":"text","marks":[{"type":"bold"},{"type":"link","attrs":{"href":"https://example.com","target":"_blank","rel":null,"class":null}}],"text":"gras lié"},{"type":"hardBreak"},{"type":"text","marks":[{"type":"code"}],"text":"code"},{"type":"text","marks":[{"type":"underline"}],"text":" souligné"}]},{"type":"codeBlock","attrs":{"language":null},"content":[{"type":"text","text":"let x = 1;\nlet y = 2;"}]},{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"un"}]}]}]},{"type":"taskList","content":[{"type":"taskItem","attrs":{"checked":true},"content":[{"type":"paragraph","content":[{"type":"text","text":"fait"}]}]}]},{"type":"horizontalRule"},{"type":"databaseView","attrs":{"databaseId":"x","viewId":"y"}},{"type":"paragraph"}]}"#;
 
 #[test]
@@ -110,7 +110,7 @@ fn equality_ignores_how_empty_collections_were_written() {
 
 #[test]
 fn the_original_key_order_of_each_node_is_preserved() {
-    // `text` avant `marks` : ordre produit par certains convertisseurs Markdown.
+    // `text` before `marks`: the order produced by some Markdown converters.
     let text_first = r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"a","marks":[{"type":"bold"}]}]}]}"#;
     assert_eq!(
         Node::from_json_str(text_first).unwrap().to_json_string(),

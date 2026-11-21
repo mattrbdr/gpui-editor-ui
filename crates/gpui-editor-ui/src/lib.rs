@@ -1,8 +1,8 @@
-//! Éditeur de texte riche à blocs pour GPUI.
+//! Block-based rich text editor for GPUI.
 //!
-//! [`EditorView`] affiche un document de `gpui_editor_core`, gère le curseur, la sélection, la
-//! souris, le clavier, le presse-papiers et la saisie IME (touches mortes, compositions). Le
-//! contenu est lu par l'application via [`EditorView::doc`] et les événements [`EditorEvent`].
+//! [`EditorView`] displays a `gpui_editor_core` document and handles the caret, selection,
+//! mouse, keyboard, clipboard and IME input (dead keys, compositions). The application reads
+//! the content through [`EditorView::doc`] and [`EditorEvent`] events.
 //!
 //! ```ignore
 //! gpui_editor_ui::bind_keys(cx);

@@ -1,8 +1,8 @@
-//! Actions et raccourcis clavier de l'éditeur.
+//! Editor actions and keyboard shortcuts.
 
 use gpui::{App, KeyBinding, actions};
 
-/// Contexte de touches des raccourcis de l'éditeur.
+/// Key context of the editor shortcuts.
 pub const CONTEXT: &str = "GpuiEditor";
 
 actions!(
@@ -62,7 +62,7 @@ actions!(
     ]
 );
 
-/// Enregistre les raccourcis (variantes `ctrl` et `cmd`). À appeler une fois au démarrage.
+/// Registers the shortcuts (`ctrl` and `cmd` variants). Call once at startup.
 pub fn bind_keys(cx: &mut App) {
     let ctx = Some(CONTEXT);
     let mut bindings = vec![

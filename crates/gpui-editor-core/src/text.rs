@@ -1,13 +1,13 @@
-//! Texte brut d'un document : feuilles de texte, saut de ligne après chaque bloc.
+//! Plain text of a document: text leaves, with a line break after each block.
 
 use crate::model::{Kind, Node};
 
-/// `String.prototype.trim` : espaces Unicode et BOM, mais pas U+0085.
+/// `String.prototype.trim`: Unicode whitespace and BOM, but not U+0085.
 fn js_trim(text: &str) -> &str {
     text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
 }
 
-/// Remplace toute suite de trois sauts de ligne ou plus par deux.
+/// Collapses any run of three or more line breaks into two.
 fn collapse_blank_lines(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut run = 0;
@@ -38,16 +38,16 @@ fn ends_with_newline(kind: &Kind, extra: &[&str]) -> bool {
 }
 
 impl Node {
-    /// Texte brut : le texte des feuilles, un saut de ligne après chaque bloc, lignes vides réduites.
+    /// Plain text: the text of the leaves, a line break after each block, blank lines collapsed.
     #[must_use]
     pub fn plain_text(&self) -> String {
         self.plain_text_with(&|_| None, &[])
     }
 
-    /// Comme [`Node::plain_text`], avec un rendu propre à l'application pour certains nœuds.
+    /// Like [`Node::plain_text`], with application-specific rendering for some nodes.
     ///
-    /// `leaf` renvoie le texte d'un nœud personnalisé (mention, vue…) ; `extra_blocks` liste les noms
-    /// de nœuds personnalisés qui se terminent eux aussi par un saut de ligne.
+    /// `leaf` returns the text of a custom node (mention, view…); `extra_blocks` lists the names of
+    /// custom nodes that also end with a line break.
     #[must_use]
     pub fn plain_text_with(
         &self,

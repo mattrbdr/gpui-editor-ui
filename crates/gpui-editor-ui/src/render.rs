@@ -1,4 +1,4 @@
-//! Rendu de l'éditeur : arbre de blocs, texte stylé, curseur et sélection peints en surcouche.
+//! Editor rendering: block tree, styled text, and caret and selection painted in an overlay.
 
 use std::ops::Range;
 
@@ -15,7 +15,7 @@ use crate::{
     view::{EditorView, Marked, chars_to_bytes},
 };
 
-/// Apparence d'un bloc de texte.
+/// Appearance of a text block.
 #[derive(Clone, Copy)]
 struct BlockLook {
     size: gpui::Pixels,
@@ -26,7 +26,7 @@ struct BlockLook {
 
 const HEADING_SCALE: [f32; 6] = [1.9, 1.6, 1.35, 1.2, 1.1, 1.0];
 
-/// Texte d'un bloc et styles des marques, en décalages d'octets.
+/// Text of a block and mark styles, as byte offsets.
 fn text_and_styles(
     node: &Node,
     theme: &crate::EditorTheme,
@@ -92,7 +92,7 @@ fn text_and_styles(
                             .and_then(|v| v.as_str())
                             .filter(|v| !v.is_empty())
                     })
-                    .unwrap_or("Lien");
+                    .unwrap_or("Link");
                 let start = text.len();
                 text.push_str("[[");
                 text.push_str(label);
@@ -106,7 +106,7 @@ fn text_and_styles(
                     },
                 ));
             }
-            // Nœud en ligne inconnu : un seul caractère de substitution, comme dans le modèle.
+            // Unknown inline node: a single replacement character, as in the model.
             Kind::Other(_) => text.push('\u{fffc}'),
             _ => {}
         }
@@ -114,7 +114,7 @@ fn text_and_styles(
     (text, styles)
 }
 
-/// Ajoute un soulignement sur `range` (texte en cours de composition) en découpant les styles.
+/// Adds an underline on `range` (text being composed) by splitting the styles.
 fn with_underline(
     styles: &[(Range<usize>, HighlightStyle)],
     range: &Range<usize>,
@@ -178,7 +178,7 @@ impl EditorView {
         if let Some(range) = self.marked_bytes(index, &text) {
             styles = with_underline(&styles, &range, text.len());
         }
-        // Un bloc vide garde une ligne : l'index 0 reste valable pour le curseur.
+        // An empty block keeps one line: index 0 stays valid for the caret.
         let shown = if text.is_empty() {
             " ".to_owned()
         } else {
@@ -215,7 +215,7 @@ impl EditorView {
         element.into_any_element()
     }
 
-    /// Menu `/` sous le bloc courant.
+    /// `/` menu below the current block.
     fn slash_menu(&self, line_height: gpui::Pixels, cx: &Context<Self>) -> AnyElement {
         let theme = &self.theme;
         let selected = self.slash.map_or(0, |slash| slash.selected);
@@ -226,7 +226,7 @@ impl EditorView {
                     .px_2()
                     .py_1()
                     .text_color(theme.muted)
-                    .child("Aucun résultat")
+                    .child("No results")
                     .into_any_element(),
             ]
         } else {
@@ -273,7 +273,7 @@ impl EditorView {
             .into_any_element()
     }
 
-    /// Aperçu d'un bloc inconnu : titre, sous-titre et tableau compact.
+    /// Preview of an unknown block: title, subtitle and compact table.
     fn embed_card(&self, card: &crate::EmbedCard) -> AnyElement {
         let theme = &self.theme;
         let header = div()
@@ -338,7 +338,7 @@ impl EditorView {
             .into_any_element()
     }
 
-    /// Menu `[[` : cibles proposées par l'application, avec leur chemin en second plan.
+    /// `[[` menu: targets offered by the application, with their path in muted text.
     fn mention_menu(&self, line_height: gpui::Pixels, cx: &Context<Self>) -> AnyElement {
         let theme = &self.theme;
         let selected = self.mention.map_or(0, |mention| mention.selected);
@@ -348,7 +348,7 @@ impl EditorView {
                     .px_2()
                     .py_1()
                     .text_color(theme.muted)
-                    .child("Aucun résultat")
+                    .child("No results")
                     .into_any_element(),
             ]
         } else {
@@ -421,7 +421,7 @@ impl EditorView {
             .collect()
     }
 
-    /// Bloc de code : fond, police à chasse fixe et bouton « Copier ».
+    /// Code block: background, monospace font and "Copy" button.
     fn build_code_block(
         &self,
         node: &Node,
@@ -468,7 +468,7 @@ impl EditorView {
                     .text_color(if copied { theme.link } else { theme.muted })
                     .cursor_pointer()
                     .hover(|button| button.text_color(theme.text))
-                    .child(if copied { "Copié ✓" } else { "Copier" })
+                    .child(if copied { "Copied ✓" } else { "Copy" })
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, _, _, cx| {
@@ -566,7 +566,7 @@ impl EditorView {
             }
             Kind::Other(name) => {
                 let label = match node.attrs.get("alt").and_then(serde_json::Value::as_str) {
-                    Some(alt) if name == "image" => format!("[image : {alt}]"),
+                    Some(alt) if name == "image" => format!("[image: {alt}]"),
                     _ => format!("[{name}]"),
                 };
                 div()
@@ -661,7 +661,7 @@ impl EditorView {
     }
 }
 
-/// Case à cocher dessinée (carré arrondi, coche tracée) : indépendante des polices du système.
+/// Drawn checkbox (rounded square, stroked check mark): independent of system fonts.
 fn checkbox(checked: bool, accent: Hsla, border: Hsla, mark: Hsla) -> AnyElement {
     const SIDE: f32 = 16.0;
     let base = div()
@@ -703,7 +703,7 @@ fn checkbox(checked: bool, accent: Hsla, border: Hsla, mark: Hsla) -> AnyElement
     }
 }
 
-/// Surcouche absolue : enregistre le gestionnaire d'entrée, peint la sélection et le curseur.
+/// Absolute overlay: registers the input handler, paints the selection and the caret.
 fn overlay(cx: &Context<EditorView>, selection: Hsla, caret_color: Hsla) -> AnyElement {
     let entity = cx.entity();
     canvas(
@@ -732,7 +732,7 @@ fn overlay(cx: &Context<EditorView>, selection: Hsla, caret_color: Hsla) -> AnyE
             entity.update(cx, |view, cx| {
                 view.painted = true;
                 view.focused = focused;
-                // Le défilement ne prend effet qu'au dessin suivant : en demander un.
+                // Scrolling only takes effect on the next paint: request one.
                 if view.reveal_caret_now() {
                     cx.notify();
                 }

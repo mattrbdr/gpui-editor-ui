@@ -1,6 +1,6 @@
 use serde_json::{Map, Value};
 
-/// Type d'un nœud.
+/// Node type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Kind {
     Doc,
@@ -16,12 +16,12 @@ pub enum Kind {
     HorizontalRule,
     HardBreak,
     Text,
-    /// Type non reconnu, conservé par son nom.
+    /// Unrecognized type, kept by name.
     Other(String),
 }
 
 impl Kind {
-    /// Type correspondant à un nom ProseMirror (`"heading"`, `"codeBlock"`…).
+    /// Type matching a ProseMirror name (`"heading"`, `"codeBlock"`…).
     #[must_use]
     pub fn from_name(name: &str) -> Self {
         match name {
@@ -42,7 +42,7 @@ impl Kind {
         }
     }
 
-    /// Nom ProseMirror du type.
+    /// ProseMirror name of the type.
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
@@ -63,20 +63,20 @@ impl Kind {
         }
     }
 
-    /// Bloc dont le contenu est du texte en ligne.
+    /// Block whose content is inline text.
     #[must_use]
     pub fn is_textblock(&self) -> bool {
         matches!(self, Self::Paragraph | Self::Heading | Self::CodeBlock)
     }
 
-    /// Nœud sans enfants par construction.
+    /// Node that has no children by construction.
     #[must_use]
     pub fn is_leaf(&self) -> bool {
         matches!(self, Self::HorizontalRule | Self::HardBreak | Self::Text)
     }
 }
 
-/// Type d'une marque en ligne.
+/// Inline mark type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum MarkKind {
     Bold,
@@ -85,7 +85,7 @@ pub enum MarkKind {
     Underline,
     Code,
     Link,
-    /// Marque non reconnue, conservée par son nom.
+    /// Unrecognized mark, kept by name.
     Other(String),
 }
 
@@ -117,7 +117,7 @@ impl MarkKind {
     }
 }
 
-/// Marque appliquée à un texte (gras, lien…).
+/// Mark applied to text (bold, link…).
 #[derive(Debug, Clone)]
 pub struct Mark {
     pub kind: MarkKind,
@@ -142,7 +142,7 @@ impl Mark {
     }
 }
 
-/// Clé d'un nœud ou d'une marque JSON.
+/// Key of a JSON node or mark.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Key {
     Type,
@@ -153,7 +153,7 @@ pub(crate) enum Key {
 }
 
 impl Key {
-    /// Ordre de ProseMirror : `type`, `attrs`, `content`, `marks`, `text`.
+    /// ProseMirror order: `type`, `attrs`, `content`, `marks`, `text`.
     pub(crate) const CANONICAL: [Self; 5] = [
         Self::Type,
         Self::Attrs,
@@ -177,24 +177,24 @@ impl Key {
     }
 }
 
-/// Particularités de la source à restituer à l'identique : clés vides et ordre des clés.
+/// Source quirks to reproduce exactly: empty keys and key order.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Shape {
     pub attrs: bool,
     pub content: bool,
     pub marks: bool,
-    /// Ordre des clés de la source, seulement s'il diffère de l'ordre canonique.
+    /// Key order of the source, only if it differs from the canonical order.
     pub order: Option<Vec<Key>>,
 }
 
-/// Nœud du document (même forme que ProseMirror).
+/// Document node (same shape as ProseMirror).
 #[derive(Debug, Clone)]
 pub struct Node {
     pub kind: Kind,
     pub attrs: Map<String, Value>,
     pub content: Vec<Node>,
     pub marks: Vec<Mark>,
-    /// Texte d'un nœud [`Kind::Text`].
+    /// Text of a [`Kind::Text`] node.
     pub text: Option<String>,
     pub(crate) shape: Shape,
 }
@@ -210,7 +210,7 @@ impl PartialEq for Node {
 }
 
 impl Node {
-    /// Nœud vide du type donné.
+    /// Empty node of the given type.
     #[must_use]
     pub fn new(kind: Kind) -> Self {
         Self {
@@ -223,7 +223,7 @@ impl Node {
         }
     }
 
-    /// Nœud texte sans marque.
+    /// Text node without marks.
     #[must_use]
     pub fn text(value: impl Into<String>) -> Self {
         Self {
@@ -232,7 +232,7 @@ impl Node {
         }
     }
 
-    /// Parcourt le nœud puis ses descendants, dans l'ordre du document.
+    /// Visits the node and then its descendants, in document order.
     pub fn walk(&self, visit: &mut impl FnMut(&Node)) {
         visit(self);
         for child in &self.content {

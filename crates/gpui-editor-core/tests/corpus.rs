@@ -1,11 +1,11 @@
-//! Rejoue un corpus réel sans jamais le versionner.
+//! Replays a real-world corpus without ever committing it.
 //!
-//! Définir `GPUI_EDITOR_CORPUS` avec le chemin d'un fichier contenant un document JSON par ligne ;
-//! sans cette variable, le test ne fait rien.
+//! Set `GPUI_EDITOR_CORPUS` to the path of a file containing one JSON document per line;
+//! without this variable, the test does nothing.
 
 use gpui_editor_core::Node;
 
-/// Extrait de `text` autour de l'octet `at`, sans couper un caractère.
+/// Excerpt of `text` around byte `at`, without splitting a character.
 fn window(text: &str, at: usize) -> &str {
     let mut start = at.saturating_sub(30);
     while !text.is_char_boundary(start) {
@@ -23,7 +23,7 @@ fn every_document_of_an_external_corpus_round_trips_byte_for_byte() {
     let Some(path) = std::env::var_os("GPUI_EDITOR_CORPUS") else {
         return;
     };
-    let corpus = std::fs::read_to_string(&path).expect("corpus illisible");
+    let corpus = std::fs::read_to_string(&path).expect("unreadable corpus");
     let mut checked = 0;
     for (index, line) in corpus
         .lines()
@@ -31,7 +31,7 @@ fn every_document_of_an_external_corpus_round_trips_byte_for_byte() {
         .enumerate()
     {
         let node = Node::from_json_str(line)
-            .unwrap_or_else(|error| panic!("document {index} illisible : {error}"));
+            .unwrap_or_else(|error| panic!("unreadable document {index}: {error}"));
         let written = node.to_json_string();
         if written != line {
             let at = written
@@ -40,13 +40,13 @@ fn every_document_of_an_external_corpus_round_trips_byte_for_byte() {
                 .take_while(|(a, b)| a == b)
                 .count();
             panic!(
-                "document {index} : écart à l'octet {at}\n  source : {}\n  écrit  : {}",
+                "document {index}: mismatch at byte {at}\n  source:  {}\n  written: {}",
                 window(line, at),
                 window(&written, at)
             );
         }
         checked += 1;
     }
-    assert!(checked > 0, "corpus vide");
-    eprintln!("{checked} documents vérifiés");
+    assert!(checked > 0, "empty corpus");
+    eprintln!("{checked} documents checked");
 }

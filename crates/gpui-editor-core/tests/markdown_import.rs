@@ -10,7 +10,7 @@ fn cases() -> Vec<Value> {
         .clone()
 }
 
-/// Cas où l'import doit produire exactement le JSON de `@tiptap/markdown`.
+/// Cases where the import must produce exactly the JSON of `@tiptap/markdown`.
 const SAME_AS_TIPTAP: &[&str] = &[
     "empty",
     "paragraph",
@@ -74,14 +74,14 @@ fn markdown_import_matches_tiptap_on_the_reference_cases() {
         let expected = case["doc"].to_string();
         if actual != expected {
             failures.push(format!(
-                "{name}\n   source  : {markdown:?}\n   attendu : {expected}\n   obtenu  : {actual}"
+                "{name}\n   source:   {markdown:?}\n   expected: {expected}\n   actual:   {actual}"
             ));
         }
     }
     assert_eq!(checked, SAME_AS_TIPTAP.len());
     assert!(
         failures.is_empty(),
-        "{} écart(s) :\n{}",
+        "{} mismatch(es):\n{}",
         failures.len(),
         failures.join("\n")
     );
@@ -89,10 +89,10 @@ fn markdown_import_matches_tiptap_on_the_reference_cases() {
 
 #[test]
 fn the_clean_import_keeps_what_tiptap_drops_or_mangles() {
-    // Tableau : TipTap l'ignore, on le garde en texte plutôt que de perdre le contenu.
+    // Table: TipTap drops it; it is kept as text rather than losing the content.
     let table = Node::from_markdown("|a|b|\n|-|-|\n|1|2|");
     assert_eq!(table.plain_text(), "|a|b|\n|-|-|\n|1|2|");
-    // Entités : toutes décodées (TipTap ne décode que quelques-unes).
+    // Entities: all decoded (TipTap only decodes a few).
     assert_eq!(
         Node::from_markdown("a &amp; b &copy;").plain_text(),
         "a & b ©"

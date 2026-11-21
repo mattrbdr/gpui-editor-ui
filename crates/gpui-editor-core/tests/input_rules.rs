@@ -19,7 +19,7 @@ fn hash_marks_followed_by_a_space_make_a_heading() {
     for level in 1..=6usize {
         let mut e = empty();
         typed(&mut e, &format!("{} ", "#".repeat(level)));
-        assert_eq!(e.block_kind(0), Kind::Heading, "niveau {level}");
+        assert_eq!(e.block_kind(0), Kind::Heading, "level {level}");
         assert_eq!(
             e.block_node(0).attrs["level"],
             u64::try_from(level).unwrap()
@@ -33,7 +33,7 @@ fn hash_marks_followed_by_a_space_make_a_heading() {
     assert_eq!(
         e.block_kind(0),
         Kind::Paragraph,
-        "sept dièses : pas un titre"
+        "seven hashes: not a heading"
     );
 }
 
@@ -153,7 +153,7 @@ fn inline_delimiters_apply_marks_when_closed() {
         assert!(e.is_mark_active(&kind), "{input}");
         assert!(
             !e.block_text(0).contains(['*', '`', '~', '_']),
-            "{input} : {}",
+            "{input}: {}",
             e.block_text(0)
         );
     }
@@ -285,13 +285,9 @@ fn enter_on_an_empty_last_line_leaves_a_code_block() {
     e.split_block();
     typed(&mut e, "ls");
     e.split_block();
-    assert_eq!(
-        e.block_text(0),
-        "ls\n",
-        "un premier Entrée ajoute une ligne"
-    );
+    assert_eq!(e.block_text(0), "ls\n", "a first Enter adds a line");
     e.split_block();
-    assert_eq!(e.block_count(), 2, "le second Entrée sort du bloc");
+    assert_eq!(e.block_count(), 2, "a second Enter leaves the block");
     assert_eq!(e.block_text(0), "ls");
     assert_eq!(e.block_kind(1), Kind::Paragraph);
     assert_eq!(
@@ -314,7 +310,7 @@ fn enter_inside_a_code_block_keeps_adding_lines_and_a_lone_empty_block_stays() {
     assert_eq!(
         e.block_count(),
         1,
-        "un bloc vide garde sa première ligne vide"
+        "an empty block keeps its first empty line"
     );
     assert_eq!(e.block_text(0), "\n");
     e.split_block();
@@ -332,7 +328,7 @@ fn enter_inside_a_code_block_keeps_adding_lines_and_a_lone_empty_block_stays() {
     assert_eq!(
         e.block_text(0),
         "\na\nb",
-        "Entrée au milieu insère une ligne"
+        "Enter in the middle inserts a line"
     );
     assert_eq!(e.block_count(), 1);
 }
