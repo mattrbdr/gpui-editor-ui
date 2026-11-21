@@ -432,7 +432,7 @@ fn the_slash_menu_closes_on_escape_backspace_or_a_space_and_never_opens_mid_word
 fn with_no_match_enter_just_splits_the_block(cx: &mut TestAppContext) {
     let window = open_empty(cx);
     cx.simulate_input(any(window), "/zzz");
-    assert!(slash_items(cx, window).is_empty());
+    assert_eq!(slash_items(cx, window), Vec::<String>::new());
     cx.simulate_keystrokes(any(window), "enter");
     assert!(!slash_open(cx, window));
     assert_eq!(texts(cx, window), ["/zzz", ""]);

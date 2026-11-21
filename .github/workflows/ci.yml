@@ -18,7 +18,7 @@ jobs:
         # 1.89 is the workspace's rust-version.
         toolchain: [stable, "1.89"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -33,7 +33,7 @@ jobs:
   ui:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: System libraries for GPUI
         run: |
           sudo apt-get update
