@@ -8,6 +8,8 @@
 //! other key is ignored when parsing. An empty `attrs` or `content` written explicitly in the
 //! source is preserved as is.
 
+#![warn(missing_docs)]
+
 mod edit;
 mod error;
 mod markdown;

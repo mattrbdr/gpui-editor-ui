@@ -23,18 +23,23 @@ use tree::{Path, blocks_in_order, node_at, node_at_mut};
 /// Cursor position: index of the text block and character offset within that block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Pos {
+    /// Index of the text block, in document order (see [`Editor::block_count`]).
     pub block: usize,
+    /// Offset in characters (Unicode scalar values) from the start of the block.
     pub offset: usize,
 }
 
 /// Selection: `anchor` is fixed, `head` moves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Selection {
+    /// End that stays in place when the selection is extended.
     pub anchor: Pos,
+    /// End that moves, where the caret is shown.
     pub head: Pos,
 }
 
 impl Selection {
+    /// Empty selection (a caret) at `pos`.
     #[must_use]
     pub fn caret(pos: Pos) -> Self {
         Self {
@@ -43,16 +48,19 @@ impl Selection {
         }
     }
 
+    /// Whether the selection is empty (`anchor == head`).
     #[must_use]
     pub fn is_collapsed(&self) -> bool {
         self.anchor == self.head
     }
 
+    /// First end of the selection in document order.
     #[must_use]
     pub fn start(&self) -> Pos {
         self.anchor.min(self.head)
     }
 
+    /// Last end of the selection in document order.
     #[must_use]
     pub fn end(&self) -> Pos {
         self.anchor.max(self.head)
@@ -72,17 +80,48 @@ struct Snapshot {
 /// Block type that can be inserted (`/` menu).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockCommand {
+    /// Turns the block into a `paragraph`.
     Paragraph,
+    /// Turns the block into a `heading` of the given level.
     Heading(u8),
+    /// Wraps the block in a `bulletList`.
     BulletList,
+    /// Wraps the block in an `orderedList`.
     OrderedList,
+    /// Wraps the block in a `taskList`.
     TaskList,
+    /// Wraps the block in a `blockquote`.
     Quote,
+    /// Turns the block into a `codeBlock` (with `language: null`).
     CodeBlock,
+    /// Inserts a `horizontalRule` after the block (in its place if it is empty), then a paragraph.
     Rule,
 }
 
 /// Document being edited, with its selection and history.
+///
+/// ```
+/// use gpui_editor_core::{Editor, MarkKind, Node, Pos, Selection};
+///
+/// let mut editor = Editor::new(Node::from_markdown("# Notes\n\nHello world"));
+/// assert_eq!(editor.block_count(), 2);
+///
+/// editor.set_selection(Selection::caret(Pos { block: 1, offset: 5 }));
+/// editor.insert_text(",");
+/// assert_eq!(editor.block_text(1), "Hello, world");
+///
+/// // Select "world" and make it bold.
+/// editor.set_selection(Selection {
+///     anchor: Pos { block: 1, offset: 7 },
+///     head: Pos { block: 1, offset: 12 },
+/// });
+/// editor.toggle_mark(MarkKind::Bold);
+/// assert_eq!(editor.doc().to_markdown(), "# Notes\n\nHello, **world**");
+///
+/// editor.undo();
+/// editor.undo();
+/// assert_eq!(editor.block_text(1), "Hello world");
+/// ```
 #[derive(Debug, Clone)]
 pub struct Editor {
     doc: Node,
@@ -122,16 +161,19 @@ impl Editor {
         }
     }
 
+    /// The document as currently edited.
     #[must_use]
     pub fn doc(&self) -> &Node {
         &self.doc
     }
 
+    /// Consumes the editor and returns its document.
     #[must_use]
     pub fn into_doc(self) -> Node {
         self.doc
     }
 
+    /// Current selection.
     #[must_use]
     pub fn selection(&self) -> Selection {
         self.selection
@@ -180,6 +222,7 @@ impl Editor {
         node_at_mut(&mut self.doc, path)
     }
 
+    /// Number of text blocks (paragraphs, headings, code blocks); always at least 1.
     #[must_use]
     pub fn block_count(&self) -> usize {
         self.textblocks().len()
@@ -205,11 +248,13 @@ impl Editor {
         flat_text(&self.atoms(block))
     }
 
+    /// Length of the block in characters (a hard break or an inline atom counts as one).
     #[must_use]
     pub fn block_len(&self, block: usize) -> usize {
         self.atoms(block).len()
     }
 
+    /// Type of the text block.
     #[must_use]
     pub fn block_kind(&self, block: usize) -> Kind {
         node_at(&self.doc, &self.path_of(block)).kind.clone()
@@ -230,6 +275,7 @@ impl Editor {
         }
     }
 
+    /// Sets the selection, clamped to the document, and forgets the marks stored at the caret.
     pub fn set_selection(&mut self, selection: Selection) {
         self.selection = Selection {
             anchor: self.clamp(selection.anchor),

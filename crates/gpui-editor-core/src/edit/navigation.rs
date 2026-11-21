@@ -109,6 +109,8 @@ impl Editor {
         self.go(pos, extend);
     }
 
+    /// Moves one grapheme left, to the end of the previous block at a block start; collapses a
+    /// selection to its start unless `extend`.
     pub fn move_left(&mut self, extend: bool) {
         if !extend && !self.selection.is_collapsed() {
             let start = self.selection.start();
@@ -132,6 +134,8 @@ impl Editor {
         self.go(target, extend);
     }
 
+    /// Moves one grapheme right, to the start of the next block at a block end; collapses a
+    /// selection to its end unless `extend`.
     pub fn move_right(&mut self, extend: bool) {
         if !extend && !self.selection.is_collapsed() {
             let end = self.selection.end();
@@ -156,6 +160,7 @@ impl Editor {
         self.go(target, extend);
     }
 
+    /// Moves to the start of the previous word (or of the block, or the end of the previous block).
     pub fn move_word_left(&mut self, extend: bool) {
         let head = self.selection.head;
         let spans = word_spans(&self.block_text(head.block));
@@ -176,6 +181,7 @@ impl Editor {
         self.go(target, extend);
     }
 
+    /// Moves to the end of the next word (or of the block, or the start of the next block).
     pub fn move_word_right(&mut self, extend: bool) {
         let head = self.selection.head;
         let len = self.block_len(head.block);
@@ -197,17 +203,20 @@ impl Editor {
         self.go(target, extend);
     }
 
+    /// Moves to the start of the current block.
     pub fn move_to_block_start(&mut self, extend: bool) {
         let block = self.selection.head.block;
         self.go(Pos { block, offset: 0 }, extend);
     }
 
+    /// Moves to the end of the current block.
     pub fn move_to_block_end(&mut self, extend: bool) {
         let block = self.selection.head.block;
         let offset = self.block_len(block);
         self.go(Pos { block, offset }, extend);
     }
 
+    /// Moves to the start of the first text block.
     pub fn move_to_doc_start(&mut self, extend: bool) {
         self.go(
             Pos {
@@ -218,12 +227,14 @@ impl Editor {
         );
     }
 
+    /// Moves to the end of the last text block.
     pub fn move_to_doc_end(&mut self, extend: bool) {
         let block = self.block_count() - 1;
         let offset = self.block_len(block);
         self.go(Pos { block, offset }, extend);
     }
 
+    /// Selects from the start of the first text block to the end of the last one.
     pub fn select_all(&mut self) {
         let last = self.block_count() - 1;
         self.selection = Selection {

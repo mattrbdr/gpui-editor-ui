@@ -39,6 +39,13 @@ fn ends_with_newline(kind: &Kind, extra: &[&str]) -> bool {
 
 impl Node {
     /// Plain text: the text of the leaves, a line break after each block, blank lines collapsed.
+    ///
+    /// ```
+    /// use gpui_editor_core::Node;
+    ///
+    /// let doc = Node::from_markdown("# Title\n\nSome **bold** text.\n\nThe end.");
+    /// assert_eq!(doc.plain_text(), "Title\nSome bold text.\nThe end.");
+    /// ```
     #[must_use]
     pub fn plain_text(&self) -> String {
         self.plain_text_with(&|_| None, &[])

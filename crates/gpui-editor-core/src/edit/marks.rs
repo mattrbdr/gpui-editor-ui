@@ -66,6 +66,7 @@ impl Editor {
         }
     }
 
+    /// Turns the selected blocks into code blocks, or back into paragraphs if they all are.
     pub fn toggle_code_block(&mut self) {
         self.checkpoint();
         let all = self
@@ -82,6 +83,8 @@ impl Editor {
         }
     }
 
+    /// Toggles the mark on the selection: removed if active over all of it, applied otherwise.
+    /// With a caret, toggles it for the text typed next.
     pub fn toggle_mark(&mut self, kind: MarkKind) {
         self.toggle_mark_with(&Mark::new(kind));
     }

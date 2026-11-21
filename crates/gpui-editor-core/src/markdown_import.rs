@@ -10,6 +10,18 @@ use crate::{Flavor, Kind, Mark, MarkKind, MarkdownOptions, Node, model::Key};
 
 impl Node {
     /// Document from CommonMark Markdown.
+    ///
+    /// ```
+    /// use gpui_editor_core::{Kind, MarkKind, Node};
+    ///
+    /// let doc = Node::from_markdown("# Title\n\nSome **bold**.");
+    /// assert_eq!(doc.kind, Kind::Doc);
+    /// assert_eq!(doc.content[0].kind, Kind::Heading);
+    /// assert_eq!(doc.content[0].attrs["level"], 1);
+    /// let bold = &doc.content[1].content[1];
+    /// assert_eq!(bold.text.as_deref(), Some("bold"));
+    /// assert_eq!(bold.marks[0].kind, MarkKind::Bold);
+    /// ```
     #[must_use]
     pub fn from_markdown(source: &str) -> Self {
         Self::from_markdown_with(source, &MarkdownOptions::default())

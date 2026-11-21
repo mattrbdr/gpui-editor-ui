@@ -20,17 +20,29 @@ use gpui_editor_core::{Pos, Selection};
 /// Editor colors, fonts and sizes.
 #[derive(Debug, Clone)]
 pub struct EditorTheme {
+    /// Font family of the text and menus; it needs bold and italic faces to render those marks.
     pub font_family: SharedString,
+    /// Font family of code blocks.
     pub mono_family: SharedString,
+    /// Base font size (headings are scaled from it).
     pub font_size: Pixels,
+    /// Base line height (headings are scaled from it).
     pub line_height: Pixels,
+    /// Background of the editor and of its menus.
     pub background: Hsla,
+    /// Main text color.
     pub text: Hsla,
+    /// Secondary text: list markers, checked tasks, `[name]` markers, menu details.
     pub muted: Hsla,
+    /// Caret color, also the fill of checked task boxes.
     pub caret: Hsla,
+    /// Selection highlight and the active row of the menus.
     pub selection: Hsla,
+    /// Link and mention color.
     pub link: Hsla,
+    /// Background of inline code, code blocks, mentions, embed cards and hovered menu rows.
     pub code_background: Hsla,
+    /// Borders (menus, cards, quote bar, task boxes) and horizontal rules.
     pub border: Hsla,
 }
 
@@ -56,6 +68,15 @@ impl Default for EditorTheme {
 impl EditorTheme {
     /// Dark variant of the default theme: light text on a dark gray background, with contrasts of
     /// at least 4.5:1 for the text, links and muted text.
+    ///
+    /// ```
+    /// use gpui_editor_ui::EditorTheme;
+    ///
+    /// let mut theme = EditorTheme::dark();
+    /// theme.font_family = "Inter".into();
+    /// assert_eq!(theme.font_size, EditorTheme::default().font_size);
+    /// assert!(theme.background.l < theme.text.l);
+    /// ```
     #[must_use]
     pub fn dark() -> Self {
         Self {
@@ -120,9 +141,13 @@ pub(crate) struct Slash {
 /// title, subtitle and a small table.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct EmbedCard {
+    /// Title, shown first.
     pub title: String,
+    /// Line shown under the title, in the muted color.
     pub subtitle: String,
+    /// Column headers of the table; no header row when empty.
     pub columns: Vec<String>,
+    /// Table rows, one cell per column.
     pub rows: Vec<Vec<String>>,
 }
 
@@ -370,6 +395,7 @@ impl EditorView {
         cx.notify();
     }
 
+    /// Replaces the theme and redraws.
     pub fn set_theme(&mut self, theme: EditorTheme, cx: &mut Context<Self>) {
         self.theme = theme;
         cx.notify();

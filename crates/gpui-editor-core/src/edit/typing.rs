@@ -85,6 +85,9 @@ impl Editor {
             .any(|(path, text)| !*text && matches!(node_at(&self.doc, path).kind, Kind::Other(_)))
     }
 
+    /// Backspace: deletes the selection or the previous grapheme. At the start of a block, turns
+    /// a non-paragraph into a paragraph, or joins a paragraph with the previous block (not across
+    /// an unknown block).
     pub fn delete_backward(&mut self) {
         // Joining across an unknown block would delete it without the user seeing it: do nothing.
         let head = self.selection.head;
@@ -124,6 +127,8 @@ impl Editor {
         }
     }
 
+    /// Delete: deletes the selection or the next grapheme; at the end of a block, joins the next
+    /// block (not across an unknown block).
     pub fn delete_forward(&mut self) {
         let head = self.selection.head;
         if self.selection.is_collapsed()
@@ -402,6 +407,7 @@ impl Editor {
         });
     }
 
+    /// Shift+Enter: replaces the selection with a `hardBreak` (a `\n` character in a code block).
     pub fn insert_hard_break(&mut self) {
         self.checkpoint();
         if !self.selection.is_collapsed() {

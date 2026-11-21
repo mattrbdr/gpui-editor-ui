@@ -101,16 +101,19 @@ impl Editor {
         self.typing = None;
     }
 
+    /// Whether there is a step to undo.
     #[must_use]
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
 
+    /// Whether there is an undone step to redo.
     #[must_use]
     pub fn can_redo(&self) -> bool {
         !self.redo.is_empty()
     }
 
+    /// Restores the document and selection as they were before the last step (no effect if none).
     pub fn undo(&mut self) {
         if let Some(snapshot) = self.undo.pop_back() {
             let current = self.snapshot();
@@ -119,6 +122,7 @@ impl Editor {
         }
     }
 
+    /// Reapplies the last undone step (no effect if none). Any new edit clears the redo steps.
     pub fn redo(&mut self) {
         if let Some(snapshot) = self.redo.pop() {
             let current = self.snapshot();
