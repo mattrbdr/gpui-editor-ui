@@ -11,6 +11,7 @@ use crate::{Kind, Mark, MarkKind, Node};
 
 /// Markdown variant to produce.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum Flavor {
     /// CommonMark with the GFM extensions (strikethrough, task lists); text is escaped correctly.
     #[default]

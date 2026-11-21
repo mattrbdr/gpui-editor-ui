@@ -2,6 +2,7 @@ use serde_json::{Map, Value};
 
 /// Node type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Kind {
     /// `doc`: the root node.
     Doc,
@@ -91,6 +92,7 @@ impl Kind {
 
 /// Inline mark type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MarkKind {
     /// `bold`.
     Bold,

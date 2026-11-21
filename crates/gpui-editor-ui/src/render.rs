@@ -75,7 +75,8 @@ fn text_and_styles(
                             style.color = Some(theme.link);
                             style.background_color = Some(theme.code_background);
                         }
-                        MarkKind::Other(_) => {}
+                        // Unknown marks, and marks added by later versions of the core: no style.
+                        _ => {}
                     }
                 }
                 if style != HighlightStyle::default() {
@@ -588,6 +589,8 @@ impl EditorView {
                 self.embed_card(&self.embeds[key])
             }
             Kind::Other(name) => self.unknown_block(name, node),
+            // A node kind added by a later version of the core: shown by name, like unknown ones.
+            other => self.unknown_block(other.name(), node),
         })
     }
 

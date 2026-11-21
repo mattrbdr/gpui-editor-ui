@@ -79,6 +79,7 @@ struct Snapshot {
 
 /// Block type that can be inserted (`/` menu).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BlockCommand {
     /// Turns the block into a `paragraph`.
     Paragraph,

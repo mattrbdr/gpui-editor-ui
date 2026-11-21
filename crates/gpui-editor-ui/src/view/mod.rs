@@ -105,6 +105,7 @@ fn default_image_source(src: &str) -> Option<ImageSource> {
 
 /// Event emitted by the editor.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum EditorEvent {
     /// The document content changed.
     Changed,
