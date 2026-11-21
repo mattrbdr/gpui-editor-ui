@@ -3,6 +3,7 @@
 //! Not part of the regular suite:
 //! `cargo test -p gpui-editor-core --release --test perf -- --ignored --nocapture`
 
+use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
 use gpui_editor_core::{Editor, Node, Pos, Selection};
@@ -11,7 +12,7 @@ use gpui_editor_core::{Editor, Node, Pos, Selection};
 fn large_markdown() -> String {
     let mut out = String::new();
     for section in 0..200 {
-        out.push_str(&format!("## Section {section}\n\n"));
+        writeln!(out, "## Section {section}\n").unwrap();
         out.push_str("Some **bold** text, some *italic* text and a [link](https://example.com).\n\n");
         out.push_str("- First item\n- Second item\n  - Nested item\n\n");
         out.push_str("- [ ] A task\n- [x] Done\n\n");

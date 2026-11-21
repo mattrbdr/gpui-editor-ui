@@ -5,6 +5,9 @@
 //! numérotés dans l'ordre du document ; les blocs sans texte (règle, nœuds inconnus) sont conservés
 //! mais ne portent pas de curseur.
 
+use std::collections::VecDeque;
+use std::sync::OnceLock;
+
 use serde_json::{Map, Value};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -351,9 +354,11 @@ pub enum BlockCommand {
 #[derive(Debug, Clone)]
 pub struct Editor {
     doc: Node,
+    /// Paths of the text blocks, in document order; reset by every mutation of `doc`.
+    index: OnceLock<Vec<Path>>,
     selection: Selection,
     stored_marks: Option<Vec<Mark>>,
-    undo: Vec<Snapshot>,
+    undo: VecDeque<Snapshot>,
     redo: Vec<Snapshot>,
     typing: Option<Pos>,
 }
@@ -369,9 +374,10 @@ impl Editor {
         }
         Self {
             doc,
+            index: OnceLock::new(),
             selection: Selection::default(),
             stored_marks: None,
-            undo: Vec::new(),
+            undo: VecDeque::new(),
             redo: Vec::new(),
             typing: None,
         }
@@ -392,12 +398,35 @@ impl Editor {
         self.selection
     }
 
-    fn textblocks(&self) -> Vec<Path> {
-        blocks_in_order(&self.doc)
-            .into_iter()
-            .filter(|(_, text)| *text)
-            .map(|(path, _)| path)
-            .collect()
+    fn textblocks(&self) -> &[Path] {
+        let index = self.index.get_or_init(|| {
+            blocks_in_order(&self.doc)
+                .into_iter()
+                .filter(|(_, text)| *text)
+                .map(|(path, _)| path)
+                .collect()
+        });
+        #[cfg(debug_assertions)]
+        {
+            let fresh: Vec<Path> = blocks_in_order(&self.doc)
+                .into_iter()
+                .filter(|(_, text)| *text)
+                .map(|(path, _)| path)
+                .collect();
+            debug_assert_eq!(*index, fresh, "stale text block index");
+        }
+        index
+    }
+
+    /// Mutable access to the document; invalidates the text block index.
+    fn doc_mut(&mut self) -> &mut Node {
+        self.index.take();
+        &mut self.doc
+    }
+
+    fn set_doc(&mut self, doc: Node) {
+        self.index.take();
+        self.doc = doc;
     }
 
     #[must_use]
@@ -416,7 +445,7 @@ impl Editor {
 
     fn set_atoms(&mut self, block: usize, atoms: &[Atom]) {
         let path = self.path_of(block);
-        rebuild(node_at_mut(&mut self.doc, &path), atoms);
+        rebuild(node_at_mut(self.doc_mut(), &path), atoms);
     }
 
     /// Texte du bloc (un saut de ligne pour chaque saut dur).
@@ -462,12 +491,12 @@ impl Editor {
     // --- Historique ---
 
     fn checkpoint(&mut self) {
-        self.undo.push(Snapshot {
+        self.undo.push_back(Snapshot {
             doc: self.doc.clone(),
             selection: self.selection,
         });
         if self.undo.len() > HISTORY_LIMIT {
-            self.undo.remove(0);
+            self.undo.pop_front();
         }
         self.redo.clear();
         self.typing = None;
@@ -484,12 +513,12 @@ impl Editor {
     }
 
     pub fn undo(&mut self) {
-        if let Some(snapshot) = self.undo.pop() {
+        if let Some(snapshot) = self.undo.pop_back() {
             self.redo.push(Snapshot {
                 doc: self.doc.clone(),
                 selection: self.selection,
             });
-            self.doc = snapshot.doc;
+            self.set_doc(snapshot.doc);
             self.selection = snapshot.selection;
             self.stored_marks = None;
             self.typing = None;
@@ -498,11 +527,11 @@ impl Editor {
 
     pub fn redo(&mut self) {
         if let Some(snapshot) = self.redo.pop() {
-            self.undo.push(Snapshot {
+            self.undo.push_back(Snapshot {
                 doc: self.doc.clone(),
                 selection: self.selection,
             });
-            self.doc = snapshot.doc;
+            self.set_doc(snapshot.doc);
             self.selection = snapshot.selection;
             self.stored_marks = None;
             self.typing = None;
@@ -776,10 +805,10 @@ impl Editor {
             .iter()
             .map(|(path, _)| path.clone())
             .collect();
-        rebuild(node_at_mut(&mut self.doc, &start_path), &merged);
+        rebuild(node_at_mut(self.doc_mut(), &start_path), &merged);
         doomed.sort();
         for path in doomed.iter().rev() {
-            remove_at(&mut self.doc, path);
+            remove_at(self.doc_mut(), path);
         }
         self.ensure_textblock();
         start
@@ -787,7 +816,7 @@ impl Editor {
 
     fn ensure_textblock(&mut self) {
         if !blocks_in_order(&self.doc).iter().any(|(_, text)| *text) {
-            self.doc.content.push(Node::new(Kind::Paragraph));
+            self.doc_mut().content.push(Node::new(Kind::Paragraph));
         }
     }
 
@@ -1028,7 +1057,7 @@ impl Editor {
         let Some((index, parent)) = path.split_last() else {
             return;
         };
-        let container = node_at_mut(&mut self.doc, parent);
+        let container = node_at_mut(self.doc_mut(), parent);
         let at = if empty {
             container.content[*index] = Node::new(Kind::HorizontalRule);
             *index + 1
@@ -1183,12 +1212,12 @@ impl Editor {
             new_block.attrs.clone_from(&node_at(&self.doc, &path).attrs);
         }
         rebuild(&mut new_block, right);
-        rebuild(node_at_mut(&mut self.doc, &path), left);
+        rebuild(node_at_mut(self.doc_mut(), &path), left);
         let index = path[path.len() - 1];
         let new_path = if in_item {
             let item_index = parent_path[parent_path.len() - 1];
             let list_path = &parent_path[..parent_path.len() - 1];
-            let following: Vec<Node> = node_at_mut(&mut self.doc, parent_path)
+            let following: Vec<Node> = node_at_mut(self.doc_mut(), parent_path)
                 .content
                 .drain(index + 1..)
                 .collect();
@@ -1198,14 +1227,14 @@ impl Editor {
             }
             item.content.push(new_block);
             item.content.extend(following);
-            node_at_mut(&mut self.doc, list_path)
+            node_at_mut(self.doc_mut(), list_path)
                 .content
                 .insert(item_index + 1, item);
             let mut new_path = list_path.to_vec();
             new_path.extend([item_index + 1, 0]);
             new_path
         } else {
-            node_at_mut(&mut self.doc, parent_path)
+            node_at_mut(self.doc_mut(), parent_path)
                 .content
                 .insert(index + 1, new_block);
             let mut new_path = parent_path.to_vec();
@@ -1232,26 +1261,26 @@ impl Editor {
         let list_len = node_at(&self.doc, list_path).content.len();
         let paragraph = Node::new(Kind::Paragraph);
         let target = if list_len == 1 {
-            node_at_mut(&mut self.doc, list_parent).content[list_index] = paragraph;
+            node_at_mut(self.doc_mut(), list_parent).content[list_index] = paragraph;
             list_path.to_vec()
         } else if item_index + 1 == list_len {
-            node_at_mut(&mut self.doc, list_path).content.pop();
-            node_at_mut(&mut self.doc, list_parent)
+            node_at_mut(self.doc_mut(), list_path).content.pop();
+            node_at_mut(self.doc_mut(), list_parent)
                 .content
                 .insert(list_index + 1, paragraph);
             let mut path = list_parent.to_vec();
             path.push(list_index + 1);
             path
         } else if item_index == 0 {
-            node_at_mut(&mut self.doc, list_path).content.remove(0);
-            node_at_mut(&mut self.doc, list_parent)
+            node_at_mut(self.doc_mut(), list_path).content.remove(0);
+            node_at_mut(self.doc_mut(), list_parent)
                 .content
                 .insert(list_index, paragraph);
             let mut path = list_parent.to_vec();
             path.push(list_index);
             path
         } else {
-            let tail: Vec<Node> = node_at_mut(&mut self.doc, list_path)
+            let tail: Vec<Node> = node_at_mut(self.doc_mut(), list_path)
                 .content
                 .drain(item_index..)
                 .collect();
@@ -1260,7 +1289,7 @@ impl Editor {
                 .attrs
                 .clone_from(&node_at(&self.doc, list_path).attrs);
             second.content = tail.into_iter().skip(1).collect();
-            let parent = node_at_mut(&mut self.doc, list_parent);
+            let parent = node_at_mut(self.doc_mut(), list_parent);
             parent.content.insert(list_index + 1, paragraph);
             if !second.content.is_empty() {
                 parent.content.insert(list_index + 2, second);
@@ -1294,7 +1323,7 @@ impl Editor {
             }
         }
         let path = self.path_of(block);
-        let node = node_at_mut(&mut self.doc, &path);
+        let node = node_at_mut(self.doc_mut(), &path);
         node.kind = kind;
         node.attrs = attrs;
         node.shape = crate::model::Shape::default();
@@ -1467,12 +1496,12 @@ impl Editor {
     // --- Règles de saisie (Markdown) ---
 
     fn push_snapshot(&mut self) {
-        self.undo.push(Snapshot {
+        self.undo.push_back(Snapshot {
             doc: self.doc.clone(),
             selection: self.selection,
         });
         if self.undo.len() > HISTORY_LIMIT {
-            self.undo.remove(0);
+            self.undo.pop_front();
         }
         self.redo.clear();
     }
@@ -1532,7 +1561,7 @@ impl Editor {
                 if start != 1
                     && let Some((list_path, _)) = self.list_context(block)
                 {
-                    node_at_mut(&mut self.doc, &list_path)
+                    node_at_mut(self.doc_mut(), &list_path)
                         .attrs
                         .insert("start".into(), Value::from(start));
                 }
@@ -1540,7 +1569,7 @@ impl Editor {
             Rule::Task(checked) => {
                 self.ensure_list(Kind::TaskList);
                 if let Some((list_path, item)) = self.list_context(block) {
-                    let item_node = &mut node_at_mut(&mut self.doc, &list_path).content[item];
+                    let item_node = &mut node_at_mut(self.doc_mut(), &list_path).content[item];
                     item_node
                         .attrs
                         .insert("checked".into(), Value::Bool(checked));
@@ -1567,7 +1596,7 @@ impl Editor {
         let Some((index, parent)) = path.split_last() else {
             return;
         };
-        let container = node_at_mut(&mut self.doc, parent);
+        let container = node_at_mut(self.doc_mut(), parent);
         let child = container.content.remove(*index);
         let mut quote = Node::new(Kind::Blockquote);
         quote.content.push(child);
@@ -1583,7 +1612,7 @@ impl Editor {
         if node_at(&self.doc, parent_path).kind == Kind::Blockquote {
             if let Some((index, above)) = parent_path.split_last() {
                 let quote = node_at(&self.doc, parent_path).clone();
-                node_at_mut(&mut self.doc, above)
+                node_at_mut(self.doc_mut(), above)
                     .content
                     .splice(*index..=*index, quote.content);
             }
@@ -1667,7 +1696,7 @@ impl Editor {
         let Some((index, parent)) = path.split_last() else {
             return false;
         };
-        node_at_mut(&mut self.doc, parent)
+        node_at_mut(self.doc_mut(), parent)
             .content
             .insert(*index + 1, Node::new(Kind::Paragraph));
         let mut fresh = parent.to_vec();
@@ -1719,7 +1748,7 @@ impl Editor {
             let Some((index, parent)) = path.split_last() else {
                 return false;
             };
-            let container = node_at_mut(&mut self.doc, parent);
+            let container = node_at_mut(self.doc_mut(), parent);
             container.content[*index] = Node::new(Kind::HorizontalRule);
             container
                 .content
@@ -1770,7 +1799,7 @@ impl Editor {
                 let (index, parent) = list_path
                     .split_last()
                     .map_or((0, Vec::new()), |(i, p)| (*i, p.to_vec()));
-                let container = node_at_mut(&mut self.doc, &parent);
+                let container = node_at_mut(self.doc_mut(), &parent);
                 container.content.splice(index..=index, blocks);
             } else {
                 let item_kind = if kind == Kind::TaskList {
@@ -1778,7 +1807,7 @@ impl Editor {
                 } else {
                     Kind::ListItem
                 };
-                let list = node_at_mut(&mut self.doc, &list_path);
+                let list = node_at_mut(self.doc_mut(), &list_path);
                 list.kind = kind;
                 list.attrs = Map::new();
                 for item in &mut list.content {
@@ -1793,7 +1822,7 @@ impl Editor {
             let (index, parent) = path
                 .split_last()
                 .map_or((0, Vec::new()), |(i, p)| (*i, p.to_vec()));
-            let container = node_at_mut(&mut self.doc, &parent);
+            let container = node_at_mut(self.doc_mut(), &parent);
             let child = container.content.remove(index);
             let mut item = Node::new(if kind == Kind::TaskList {
                 Kind::TaskItem
@@ -1824,7 +1853,7 @@ impl Editor {
             return;
         }
         self.checkpoint();
-        let item = node_at_mut(&mut self.doc, item_path);
+        let item = node_at_mut(self.doc_mut(), item_path);
         let checked = item
             .attrs
             .get("checked")
@@ -1843,7 +1872,7 @@ impl Editor {
             return;
         }
         self.checkpoint();
-        let list = node_at_mut(&mut self.doc, &list_path);
+        let list = node_at_mut(self.doc_mut(), &list_path);
         let item = list.content.remove(item_index);
         let list_kind = list.kind.clone();
         let list_attrs = list.attrs.clone();
@@ -1879,16 +1908,16 @@ impl Editor {
         self.checkpoint();
         let outer_item_index = outer_list_path[outer_list_path.len() - 1];
         let outer_list_path = outer_list_path[..outer_list_path.len() - 1].to_vec();
-        let list = node_at_mut(&mut self.doc, &list_path);
+        let list = node_at_mut(self.doc_mut(), &list_path);
         let item = list.content.remove(item_index);
         let emptied = list.content.is_empty();
         if emptied {
             let (removed, above) = list_path
                 .split_last()
                 .map_or((0, Vec::new()), |(i, p)| (*i, p.to_vec()));
-            node_at_mut(&mut self.doc, &above).content.remove(removed);
+            node_at_mut(self.doc_mut(), &above).content.remove(removed);
         }
-        node_at_mut(&mut self.doc, &outer_list_path)
+        node_at_mut(self.doc_mut(), &outer_list_path)
             .content
             .insert(outer_item_index + 1, item);
         self.reselect(block);
