@@ -119,8 +119,9 @@ Try it: `cargo run -p gpui-editor-ui --example spike [file.md]`
 Known limits: unknown nodes and inline images are shown as a `[name]` marker (they are kept in the
 document), list and quote structure is not exposed to assistive technology yet, and
 IME composition is tested through the input-handler API rather than with a real ibus keyboard.
-Every block is laid out on each frame (no virtualization): documents up to about 500 blocks stay
-within a frame, longer ones lag while typing (see [Performance](#performance)).
+Only the top-level blocks near the visible area are laid out; the others keep their measured
+height. A single huge top-level block (a list of thousands of items, for example) is still laid
+out whole.
 
 ## Performance
 
@@ -138,15 +139,17 @@ Release builds, 4-core Xeon @ 2.10 GHz (shared VM, ±30%). Full tables, method a
 
 | Editor component (update + layout + paint) | 100 blocks | 500 blocks | 2,000 blocks |
 |---|---:|---:|---:|
-| Keystroke | 2 ms | 9–10 ms | 42–65 ms |
-| Caret move | 1.6 ms | 9–10 ms | 45–60 ms |
+| Keystroke | 1.6 ms | 2.6 ms | 4.7 ms |
+| Caret move | 1.6 ms | 2.6 ms | 4.7 ms |
 
 Typing and moving the caret cost the same whatever the document size in the core; operations that
-change the document's structure are linear. In the component, GPUI lays out every block on each
-frame, which dominates beyond a few hundred blocks.
+change the document's structure are linear. The component only lays out the top-level blocks near
+the visible area (one viewport above and below, plus the caret's): before that, a keystroke cost
+9–10 ms at 500 blocks and 42–65 ms at 2,000.
 
 CI guards the growth rather than the absolute times: the complexity tests fail if an operation on
-a document 4× larger costs more than 10× as much (3× for operations local to the caret's block).
+a document 4× larger costs more than 10× as much (3× for operations local to the caret's block,
+3.5× for a keystroke in the component, which would fail again if every block were laid out).
 Reproduce with `cargo bench -p gpui-editor-core`,
 `cargo test -p gpui-editor-core --release --test scaling -- --nocapture --test-threads=1` and
 `cargo test -p gpui-editor-ui --release --test perf -- --nocapture`.

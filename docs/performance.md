@@ -41,6 +41,7 @@ Before/after of the optimizations made with these benchmarks:
 | Undo steps share unchanged blocks | 100 undo + 100 redo, 1,800 blocks | 263 ms | 19 ms |
 | Undo steps share unchanged blocks | 200 Enter, 1,800 blocks | 358 ms | 89 ms |
 | Cached text block index | 2,000 caret moves, 1,800 blocks | 459 ms | 5 ms |
+| Windowed rendering (component) | Keystroke with rendering, 2,000 blocks | 42–65 ms | 4.7 ms |
 
 ## Complexity guards (CI)
 
@@ -66,14 +67,21 @@ by a full update, layout and paint (GPUI's test platform, no GPU):
 
 | Blocks | Keystroke | Caret move | Ctrl+End, Ctrl+Home | Open `/` menu | Paste 50 lines |
 |---:|---:|---:|---:|---:|---:|
-| 100 | 2 ms | 1.6 ms | 3 ms | 3.8 ms | 6 ms |
-| 500 | 9–10 ms | 9–10 ms | 17–20 ms | 20–23 ms | 17–20 ms |
-| 2,000 | 42–65 ms | 45–60 ms | 80–130 ms | 90–115 ms | 78–127 ms |
+| 100 | 1.6 ms | 1.6 ms | 2.6 ms | 3.5 ms | 3 ms |
+| 500 | 2.6 ms | 2.6 ms | 4 ms | 5.4–6 ms | 4.3 ms |
+| 2,000 | 4.7 ms | 4.7 ms | 8 ms | 9.8 ms | 23 ms |
 
-The CI fails if a keystroke in a 4× larger document costs more than 10× as much (measured
-×4–7.4).
+Windowed rendering (`crates/gpui-editor-ui/src/visible.rs`): only the top-level blocks within one
+viewport above and below the visible area, those holding the caret or the selection anchor, and
+those never laid out are rendered. The others are empty boxes of the height they had when last
+laid out, cached by a hash of their content and cleared when the width, the theme, the embeds or
+the image resolver change, so scrolling and coordinates stay exact. Pasting stays costlier: the new
+blocks are laid out once to be measured.
 
-Every frame lays out every block. Profiling (`perf`) shows GPUI's layout engine (Taffy) and the
-element tree dominating; the editor's own work to build the tree is about 3 ms at 2,000 blocks.
-Documents up to about 500 blocks stay within a 16 ms frame; beyond that, typing visibly lags.
-Rendering only the visible blocks (virtualization) is the remaining improvement for long documents.
+Before windowing, every frame laid out every block: profiling (`perf`) showed GPUI's layout engine
+(Taffy) dominating, and a keystroke cost 2 ms at 100 blocks, 9–10 ms at 500 and 42–65 ms at 2,000
+(×4–7 for 4× the blocks). Now it grows ×1.8; the CI fails above ×3.5 (×5.5 with windowing turned
+off).
+
+Known limit: windowing works on top-level blocks, so a single huge one (a list of thousands of
+items) is still laid out whole.
