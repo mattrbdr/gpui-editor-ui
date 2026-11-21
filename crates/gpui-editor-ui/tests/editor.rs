@@ -702,7 +702,7 @@ fn ctrl_k_asks_for_a_link_and_apply_link_sets_it(cx: &mut TestAppContext) {
     );
     window
         .update(cx, |view, _, cx| {
-            view.apply_link(Some("https://exemple.fr"), cx)
+            view.apply_link(Some("https://exemple.fr"), cx);
         })
         .unwrap();
     cx.simulate_keystrokes(any(window), "ctrl-k");

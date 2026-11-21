@@ -12,7 +12,12 @@ gpui = { package = "gpui-pre", version = "=0.3.4" }
 gpui-editor-core = { path = "../gpui-editor-core" }
 serde_json = { version = "1", features = ["preserve_order"] }
 
+[features]
+# Exposes the `*_for_tests` helpers used by the integration tests.
+test-support = []
+
 [dev-dependencies]
+gpui-editor-ui = { path = ".", features = ["test-support"] }
 gpui = { package = "gpui-pre", version = "=0.3.4", features = ["test-support"] }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.4", features = ["x11", "wayland"] }
 
