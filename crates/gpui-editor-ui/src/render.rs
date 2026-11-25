@@ -181,8 +181,11 @@ impl EditorView {
         if let Some(range) = self.marked_bytes(index, &text) {
             styles = with_underline(&styles, &range, text.len());
         }
+        let placeholder = self.placeholder_shown() && !code_block;
         // An empty block keeps one line: index 0 stays valid for the caret.
-        let shown = if text.is_empty() {
+        let shown = if placeholder {
+            self.placeholder.to_string()
+        } else if text.is_empty() {
             " ".to_owned()
         } else {
             text
@@ -194,7 +197,11 @@ impl EditorView {
             .min_h(line_height)
             .text_size(size)
             .line_height(line_height)
-            .text_color(self.theme.text)
+            .text_color(if placeholder {
+                self.theme.muted
+            } else {
+                self.theme.text
+            })
             .child(shaped);
         if let Some(weight) = weight {
             element = element.font_weight(weight);
@@ -229,7 +236,7 @@ impl EditorView {
                     .px_2()
                     .py_1()
                     .text_color(theme.muted)
-                    .child("No results")
+                    .child(self.labels.no_results.clone())
                     .into_any_element(),
             ]
         } else {
@@ -240,7 +247,7 @@ impl EditorView {
                     div()
                         .id(("gpui-editor-slash", index))
                         .role(Role::ListBoxOption)
-                        .aria_label(*label)
+                        .aria_label(label.clone())
                         .aria_selected(index == selected)
                         .when(
                             index == selected,
@@ -253,7 +260,7 @@ impl EditorView {
                         .cursor_pointer()
                         .when(index == selected, |row| row.bg(theme.selection))
                         .hover(|row| row.bg(theme.code_background))
-                        .child(*label)
+                        .child(label.clone())
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, _, _, cx| {
@@ -268,7 +275,7 @@ impl EditorView {
         div()
             .id("gpui-editor-slash-menu")
             .role(Role::ListBox)
-            .aria_label("Insert block")
+            .aria_label(self.labels.insert_block.clone())
             .absolute()
             .top(line_height + px(4.0))
             .left(px(0.0))
@@ -361,7 +368,7 @@ impl EditorView {
                     .px_2()
                     .py_1()
                     .text_color(theme.muted)
-                    .child("No results")
+                    .child(self.labels.no_results.clone())
                     .into_any_element(),
             ]
         } else {
@@ -478,7 +485,11 @@ impl EditorView {
                 div()
                     .id(("gpui-editor-copy", index))
                     .role(Role::Button)
-                    .aria_label(if copied { "Code copied" } else { "Copy code" })
+                    .aria_label(if copied {
+                        self.labels.code_copied.clone()
+                    } else {
+                        self.labels.copy_code.clone()
+                    })
                     .absolute()
                     .top(px(6.0))
                     .right(px(6.0))
@@ -493,7 +504,11 @@ impl EditorView {
                     .text_color(if copied { theme.link } else { theme.muted })
                     .cursor_pointer()
                     .hover(|button| button.text_color(theme.text))
-                    .child(if copied { "Copied ✓" } else { "Copy" })
+                    .child(if copied {
+                        self.labels.copied.clone()
+                    } else {
+                        self.labels.copy.clone()
+                    })
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, _, _, cx| {
@@ -765,21 +780,36 @@ fn checkbox(checked: bool, accent: Hsla, border: Hsla, mark: Hsla) -> AnyElement
 }
 
 /// Absolute overlay: registers the input handler, paints the selection and the caret.
-fn overlay(cx: &Context<EditorView>, selection: Hsla, caret_color: Hsla) -> AnyElement {
+fn overlay(cx: &Context<EditorView>, theme: &crate::EditorTheme) -> AnyElement {
+    let (selection, caret_color) = (theme.selection, theme.caret);
+    let (search_match, search_current) = (theme.search_match, theme.search_current);
     let entity = cx.entity();
     canvas(
         |bounds, _, _| bounds,
         move |bounds, _, window, cx| {
             let focus = entity.read(cx).focus_handle.clone();
             window.handle_input(&focus, ElementInputHandler::new(bounds, entity.clone()), cx);
-            let (quads, caret, visible) = {
+            // The layouts of this frame are ready: highlights must not skip a frame after a change.
+            entity.update(cx, |view, _| view.painted = true);
+            let (matches, quads, caret, visible) = {
                 let view = entity.read(cx);
-                (
-                    view.selection_quads(),
-                    view.caret_bounds(),
-                    view.caret_visible,
-                )
+                let matches = view.search_quads();
+                // The selected match already has its own highlight.
+                let quads = if matches.iter().any(|(_, current)| *current) {
+                    Vec::new()
+                } else {
+                    view.selection_quads()
+                };
+                (matches, quads, view.caret_bounds(), view.caret_visible)
             };
+            for (quad, current) in matches {
+                let color = if current {
+                    search_current
+                } else {
+                    search_match
+                };
+                window.paint_quad(fill(quad, color));
+            }
             for quad in quads {
                 window.paint_quad(fill(quad, selection));
             }
@@ -791,7 +821,6 @@ fn overlay(cx: &Context<EditorView>, selection: Hsla, caret_color: Hsla) -> AnyE
                 window.paint_quad(fill(caret, caret_color));
             }
             entity.update(cx, |view, cx| {
-                view.painted = true;
                 view.focused = focused;
                 // Scrolling only takes effect on the next paint: request one.
                 if view.reveal_caret_now() {
@@ -924,7 +953,7 @@ impl Render for EditorView {
         let mut counter = 0;
         let blocks = self.build_document(window, &mut counter, &mut layouts, cx);
         self.layouts = layouts;
-        let overlay = overlay(cx, self.theme.selection, self.theme.caret);
+        let overlay = overlay(cx, &self.theme);
 
         self.accessible(div().id("gpui-editor"), window, cx)
             .key_context(keys::CONTEXT)
@@ -968,6 +997,7 @@ impl Render for EditorView {
             .on_action(cx.listener(Self::on_copy))
             .on_action(cx.listener(Self::on_cut))
             .on_action(cx.listener(Self::on_paste))
+            .on_action(cx.listener(Self::on_paste_plain))
             .on_action(cx.listener(Self::on_bold))
             .on_action(cx.listener(Self::on_italic))
             .on_action(cx.listener(Self::on_underline))

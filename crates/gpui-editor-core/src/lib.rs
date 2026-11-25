@@ -18,7 +18,7 @@ mod model;
 mod text;
 mod tiptap;
 
-pub use edit::{BlockCommand, Editor, Pos, Selection};
+pub use edit::{BlockCommand, Editor, Match, Pos, Selection, looks_like_markdown};
 pub use error::Error;
 pub use markdown::{Flavor, MarkdownOptions};
 pub use model::{Kind, Mark, MarkKind, Node};

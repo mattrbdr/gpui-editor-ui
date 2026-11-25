@@ -174,7 +174,8 @@ impl Editor {
         }
         let coalesce = self.selection.is_collapsed()
             && !text.contains('\n')
-            && self.typing == Some(self.selection.head);
+            && self.typing == Some(self.selection.head)
+            && !self.starts_a_word(text);
         if coalesce {
             self.redo.clear();
         } else {
@@ -187,6 +188,17 @@ impl Editor {
             _ => false,
         };
         self.typing = (!converted && !text.contains('\n')).then_some(self.selection.head);
+    }
+
+    /// Whether `text` starts a new word after a space: each word is its own undo step.
+    fn starts_a_word(&self, text: &str) -> bool {
+        let head = self.selection.head;
+        let after_space = head
+            .offset
+            .checked_sub(1)
+            .and_then(|index| self.block_text(head.block).chars().nth(index))
+            .is_some_and(char::is_whitespace);
+        after_space && !text.starts_with(char::is_whitespace)
     }
 
     pub(super) fn insert_text_raw(&mut self, text: &str) {

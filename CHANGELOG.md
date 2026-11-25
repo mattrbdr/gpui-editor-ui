@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### gpui-editor-core
+
+- `Editor::selected_markdown`, `Editor::paste_markdown` and `looks_like_markdown`.
+- `Editor::revision`.
+- Undo removes typed text one word at a time.
+- `Editor::find` and `Editor::replace_matches`: find and replace, ignoring case and accents.
+
+### gpui-editor-ui
+
+- Markdown clipboard: formatted selections are copied as Markdown, unambiguous Markdown is
+  interpreted when pasted, Ctrl+Shift+V pastes plain text.
+- `EditorView::set_placeholder`.
+- An action without effect no longer emits `Changed`.
+- Find and replace: `EditorView::set_search`, `search_step`, `search_status`,
+  `replace_current`, `replace_all`; `EditorTheme` gains `search_match` and `search_current`
+  (breaking for applications that build the theme field by field).
+- Escape propagates to the application when no menu is open.
+- `EditorLabels` and `EditorView::set_labels` translate the menus and the code block button.
+
 ## [0.1.0]
 
 First release of both crates.

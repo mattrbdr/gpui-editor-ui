@@ -3,7 +3,7 @@ use gpui::{
     WindowHandle, point, px,
 };
 use gpui_editor_core::{Kind, Node, Pos, Selection};
-use gpui_editor_ui::{EditorEvent, EditorTheme, EditorView, bind_keys};
+use gpui_editor_ui::{EditorEvent, EditorLabels, EditorTheme, EditorView, bind_keys};
 
 fn doc(blocks: &[&str]) -> Node {
     let content = blocks
@@ -379,6 +379,26 @@ fn typing_a_slash_opens_a_filterable_menu_and_enter_applies_the_command(cx: &mut
     assert_eq!(markdown(cx, window), "## Deux");
     cx.simulate_keystrokes(any(window), "ctrl-z ctrl-z");
     assert_eq!(texts(cx, window), ["/head"]);
+}
+
+#[gpui::test]
+fn the_slash_menu_shows_and_filters_the_labels_of_the_application(cx: &mut TestAppContext) {
+    let window = open_empty(cx);
+    window
+        .update(cx, |view, _, cx| {
+            view.set_labels(
+                EditorLabels {
+                    heading_1: "Titre 1".into(),
+                    heading_2: "Titre 2".into(),
+                    heading_3: "Titre 3".into(),
+                    ..EditorLabels::default()
+                },
+                cx,
+            );
+        })
+        .unwrap();
+    cx.simulate_input(any(window), "/titre");
+    assert_eq!(slash_items(cx, window), ["Titre 1", "Titre 2", "Titre 3"]);
 }
 
 #[gpui::test]
@@ -794,4 +814,172 @@ fn long_documents_only_lay_out_the_blocks_near_the_viewport(cx: &mut TestAppCont
     assert!(origin.is_some(), "the caret's block is laid out");
     let (_, height, _) = read(cx);
     assert_eq!(height, full_height, "editing kept the measured heights");
+}
+
+fn search(cx: &mut TestAppContext, window: WindowHandle<EditorView>, query: Option<&str>) {
+    window
+        .update(cx, |view, _, cx| {
+            view.set_search(query.map(str::to_owned), cx);
+        })
+        .unwrap();
+    cx.run_until_parked();
+}
+
+fn status(
+    cx: &mut TestAppContext,
+    window: WindowHandle<EditorView>,
+) -> Option<(Option<usize>, usize)> {
+    window
+        .read_with(cx, |view, _| view.search_status())
+        .unwrap()
+}
+
+fn highlights(cx: &mut TestAppContext, window: WindowHandle<EditorView>) -> usize {
+    window
+        .read_with(cx, |view, _| view.search_highlights_for_tests())
+        .unwrap()
+}
+
+#[gpui::test]
+fn searching_selects_the_next_match_and_steps_around_the_document(cx: &mut TestAppContext) {
+    let window = open(cx, doc(&["un chat", "deux chats", "Chat"]));
+    set_caret(cx, window, 1, 0);
+    search(cx, window, Some("chat"));
+    assert_eq!(status(cx, window), Some((Some(1), 3)));
+    assert_eq!(highlights(cx, window), 3);
+    assert_eq!(
+        caret(cx, window).start(),
+        Pos {
+            block: 1,
+            offset: 5
+        }
+    );
+    for expected in [2, 0, 1] {
+        window
+            .update(cx, |view, _, cx| view.search_step(true, cx))
+            .unwrap();
+        assert_eq!(status(cx, window), Some((Some(expected), 3)));
+    }
+    window
+        .update(cx, |view, _, cx| view.search_step(false, cx))
+        .unwrap();
+    assert_eq!(status(cx, window), Some((Some(0), 3)));
+    search(cx, window, None);
+    assert_eq!(status(cx, window), None);
+    assert_eq!(highlights(cx, window), 0);
+}
+
+#[gpui::test]
+fn a_match_far_down_is_scrolled_into_view_and_highlights_follow_edits(cx: &mut TestAppContext) {
+    let mut blocks = vec!["ligne"; 200];
+    blocks.push("aiguille");
+    let window = open(cx, doc(&blocks));
+    search(cx, window, Some("aiguille"));
+    let offset = window
+        .read_with(cx, |view, _| view.scroll_offset_y())
+        .unwrap();
+    assert!(offset < px(0.0), "{offset:?}");
+    assert_eq!(highlights(cx, window), 1);
+    cx.simulate_input(any(window), "x");
+    cx.run_until_parked();
+    assert_eq!(status(cx, window), Some((None, 0)));
+    cx.simulate_keystrokes(any(window), "ctrl-z");
+    cx.run_until_parked();
+    assert_eq!(status(cx, window).map(|(_, total)| total), Some(1));
+    assert_eq!(highlights(cx, window), 1);
+}
+
+#[gpui::test]
+fn replacing_moves_to_the_next_match_and_replace_all_is_one_undo_step(cx: &mut TestAppContext) {
+    let window = open(cx, doc(&["a a", "a"]));
+    search(cx, window, Some("a"));
+    let replaced = window
+        .update(cx, |view, _, cx| view.replace_current("aa", cx))
+        .unwrap();
+    assert!(replaced);
+    assert_eq!(texts(cx, window), ["aa a", "a"]);
+    assert_eq!(
+        caret(cx, window).start(),
+        Pos {
+            block: 0,
+            offset: 3
+        }
+    );
+    let count = window
+        .update(cx, |view, _, cx| view.replace_all("b", cx))
+        .unwrap();
+    assert_eq!(count, 4);
+    assert_eq!(texts(cx, window), ["bb b", "b"]);
+    cx.run_until_parked();
+    cx.simulate_keystrokes(any(window), "ctrl-z");
+    assert_eq!(texts(cx, window), ["aa a", "a"]);
+}
+
+fn clipboard(cx: &mut TestAppContext) -> String {
+    cx.read_from_clipboard()
+        .and_then(|item| item.text())
+        .unwrap_or_default()
+}
+
+#[gpui::test]
+fn formatted_text_is_copied_as_markdown_and_pasted_back(cx: &mut TestAppContext) {
+    let window = open(cx, Node::from_markdown("**gras**"));
+    cx.simulate_keystrokes(any(window), "ctrl-a ctrl-c");
+    assert_eq!(clipboard(cx), "**gras**");
+    cx.simulate_keystrokes(any(window), "ctrl-end ctrl-v");
+    assert_eq!(markdown(cx, window), "**grasgras**");
+    cx.simulate_keystrokes(any(window), "ctrl-shift-v");
+    assert_eq!(texts(cx, window), ["grasgras**gras**"]);
+}
+
+#[gpui::test]
+fn markdown_from_elsewhere_is_interpreted_only_when_unambiguous(cx: &mut TestAppContext) {
+    let window = open_empty(cx);
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("- un\r\n- deux".into()));
+    cx.simulate_keystrokes(any(window), "ctrl-v");
+    assert_eq!(markdown(cx, window), "- un\n- deux");
+    let window = open_empty(cx);
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string("log 1\nlog 2".into()));
+    cx.simulate_keystrokes(any(window), "ctrl-v");
+    assert_eq!(texts(cx, window), ["log 1", "log 2"]);
+}
+
+#[gpui::test]
+fn an_action_without_effect_does_not_report_a_change(cx: &mut TestAppContext) {
+    let window = open(cx, doc(&["a"]));
+    let changes = std::rc::Rc::new(std::cell::Cell::new(0));
+    let seen = changes.clone();
+    let view = window.root(cx).unwrap();
+    let _subscription = cx.update(|cx| {
+        cx.subscribe(&view, move |_, event, _| {
+            if *event == EditorEvent::Changed {
+                seen.set(seen.get() + 1);
+            }
+        })
+    });
+    cx.simulate_keystrokes(any(window), "ctrl-z backspace tab");
+    cx.run_until_parked();
+    assert_eq!(changes.get(), 0);
+    cx.simulate_keystrokes(any(window), "delete");
+    cx.run_until_parked();
+    assert_eq!(changes.get(), 1);
+}
+
+#[gpui::test]
+fn the_placeholder_shows_only_while_the_document_is_empty(cx: &mut TestAppContext) {
+    let window = open_empty(cx);
+    window
+        .update(cx, |view, _, cx| view.set_placeholder("Écrivez", cx))
+        .unwrap();
+    let shown = |cx: &mut TestAppContext| {
+        window
+            .read_with(cx, |view, _| view.placeholder_shown())
+            .unwrap()
+    };
+    assert!(shown(cx));
+    cx.simulate_input(any(window), "a");
+    assert!(!shown(cx));
+    assert_eq!(texts(cx, window), ["a"]);
+    cx.simulate_keystrokes(any(window), "backspace");
+    assert!(shown(cx));
 }

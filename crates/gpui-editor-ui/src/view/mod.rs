@@ -5,6 +5,7 @@ mod geometry;
 mod ime;
 mod menus;
 mod mouse;
+mod search;
 
 use std::rc::Rc;
 use std::time::Duration;
@@ -13,7 +14,7 @@ use gpui::{
     App, ClipboardItem, Context, EventEmitter, FocusHandle, Focusable, Hsla, ImageSource, Pixels,
     ScrollHandle, SharedString, Task, TextLayout, Window, hsla, point, px,
 };
-use gpui_editor_core::{BlockCommand, Editor, Node};
+use gpui_editor_core::{BlockCommand, Editor, Kind, Node};
 #[cfg(feature = "test-support")]
 use gpui_editor_core::{Pos, Selection};
 
@@ -38,6 +39,10 @@ pub struct EditorTheme {
     pub caret: Hsla,
     /// Selection highlight and the active row of the menus.
     pub selection: Hsla,
+    /// Highlight of the occurrences of a search, see [`EditorView::set_search`].
+    pub search_match: Hsla,
+    /// Highlight of the selected occurrence of a search.
+    pub search_current: Hsla,
     /// Link and mention color.
     pub link: Hsla,
     /// Background of inline code, code blocks, mentions, embed cards and hovered menu rows.
@@ -58,6 +63,8 @@ impl Default for EditorTheme {
             muted: hsla(0.0, 0.0, 0.45, 1.0),
             caret: hsla(0.6, 0.9, 0.45, 1.0),
             selection: hsla(0.6, 0.9, 0.6, 0.3),
+            search_match: hsla(0.13, 0.95, 0.55, 0.28),
+            search_current: hsla(0.08, 0.95, 0.55, 0.5),
             link: hsla(0.6, 0.8, 0.4, 1.0),
             code_background: hsla(0.0, 0.0, 0.0, 0.07),
             border: hsla(0.0, 0.0, 0.0, 0.2),
@@ -85,6 +92,8 @@ impl EditorTheme {
             muted: hsla(0.0, 0.0, 0.62, 1.0),
             caret: hsla(0.6, 0.9, 0.68, 1.0),
             selection: hsla(0.6, 0.9, 0.6, 0.35),
+            search_match: hsla(0.13, 0.9, 0.55, 0.28),
+            search_current: hsla(0.08, 0.95, 0.55, 0.55),
             link: hsla(0.58, 0.9, 0.72, 1.0),
             code_background: hsla(0.0, 0.0, 1.0, 0.08),
             border: hsla(0.0, 0.0, 1.0, 0.22),
@@ -171,38 +180,98 @@ pub struct MentionItem {
     pub detail: String,
 }
 
-/// `/` menu commands: label, search keywords, effect.
-pub(crate) const SLASH_COMMANDS: [(&str, &str, BlockCommand); 10] = [
-    ("Text", "text paragraph", BlockCommand::Paragraph),
-    ("Heading 1", "heading title h1 #", BlockCommand::Heading(1)),
-    ("Heading 2", "heading title h2 ##", BlockCommand::Heading(2)),
-    (
-        "Heading 3",
-        "heading title h3 ###",
-        BlockCommand::Heading(3),
-    ),
-    (
-        "Bulleted list",
-        "bulleted list bullet ul -",
-        BlockCommand::BulletList,
-    ),
-    (
-        "Numbered list",
-        "numbered list ordered ol 1.",
-        BlockCommand::OrderedList,
-    ),
-    (
-        "Task list",
-        "task list todo checkbox [ ]",
-        BlockCommand::TaskList,
-    ),
-    ("Quote", "quote blockquote >", BlockCommand::Quote),
-    ("Code block", "code block ```", BlockCommand::CodeBlock),
-    (
-        "Divider",
-        "divider rule separator hr ---",
-        BlockCommand::Rule,
-    ),
+/// Interface texts of the editor, English by default. Replace them with
+/// [`EditorView::set_labels`] to translate the editor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorLabels {
+    /// `/` menu: paragraph.
+    pub paragraph: SharedString,
+    /// `/` menu: level 1 heading.
+    pub heading_1: SharedString,
+    /// `/` menu: level 2 heading.
+    pub heading_2: SharedString,
+    /// `/` menu: level 3 heading.
+    pub heading_3: SharedString,
+    /// `/` menu: bulleted list.
+    pub bullet_list: SharedString,
+    /// `/` menu: numbered list.
+    pub ordered_list: SharedString,
+    /// `/` menu: task list.
+    pub task_list: SharedString,
+    /// `/` menu: quote.
+    pub quote: SharedString,
+    /// `/` menu: code block.
+    pub code_block: SharedString,
+    /// `/` menu: horizontal rule.
+    pub divider: SharedString,
+    /// Name of the `/` menu for assistive technology.
+    pub insert_block: SharedString,
+    /// Empty `/` or `[[` menu.
+    pub no_results: SharedString,
+    /// Button of a code block.
+    pub copy: SharedString,
+    /// Button of a code block just after it was used.
+    pub copied: SharedString,
+    /// Name of the copy button for assistive technology.
+    pub copy_code: SharedString,
+    /// Name of the used copy button for assistive technology.
+    pub code_copied: SharedString,
+}
+
+impl Default for EditorLabels {
+    fn default() -> Self {
+        Self {
+            paragraph: "Text".into(),
+            heading_1: "Heading 1".into(),
+            heading_2: "Heading 2".into(),
+            heading_3: "Heading 3".into(),
+            bullet_list: "Bulleted list".into(),
+            ordered_list: "Numbered list".into(),
+            task_list: "Task list".into(),
+            quote: "Quote".into(),
+            code_block: "Code block".into(),
+            divider: "Divider".into(),
+            insert_block: "Insert block".into(),
+            no_results: "No results".into(),
+            copy: "Copy".into(),
+            copied: "Copied ✓".into(),
+            copy_code: "Copy code".into(),
+            code_copied: "Code copied".into(),
+        }
+    }
+}
+
+impl EditorLabels {
+    /// Label of a `/` menu command.
+    pub(crate) fn command(&self, command: BlockCommand) -> SharedString {
+        match command {
+            BlockCommand::Heading(1) => &self.heading_1,
+            BlockCommand::Heading(2) => &self.heading_2,
+            BlockCommand::Heading(_) => &self.heading_3,
+            BlockCommand::BulletList => &self.bullet_list,
+            BlockCommand::OrderedList => &self.ordered_list,
+            BlockCommand::TaskList => &self.task_list,
+            BlockCommand::Quote => &self.quote,
+            BlockCommand::CodeBlock => &self.code_block,
+            BlockCommand::Rule => &self.divider,
+            _ => &self.paragraph,
+        }
+        .clone()
+    }
+}
+
+/// `/` menu commands: search keywords and effect.
+pub(crate) const SLASH_COMMANDS: [(&str, BlockCommand); 10] = [
+    ("text paragraph", BlockCommand::Paragraph),
+    ("heading title h1 #", BlockCommand::Heading(1)),
+    ("heading title h2 ##", BlockCommand::Heading(2)),
+    ("heading title h3 ###", BlockCommand::Heading(3)),
+    ("bulleted list bullet ul -", BlockCommand::BulletList),
+    ("numbered list ordered ol 1.", BlockCommand::OrderedList),
+    ("task list todo checkbox [ ]", BlockCommand::TaskList),
+    ("quote blockquote >", BlockCommand::Quote),
+    ("code block ```", BlockCommand::CodeBlock),
+    ("divider rule separator hr ---", BlockCommand::Rule),
 ];
 
 /// Editing component: a document, its selection and its history.
@@ -210,6 +279,7 @@ pub(crate) const SLASH_COMMANDS: [(&str, &str, BlockCommand); 10] = [
 pub struct EditorView {
     pub(crate) editor: Editor,
     pub(crate) theme: EditorTheme,
+    pub(crate) labels: EditorLabels,
     pub(crate) focus_handle: FocusHandle,
     /// Text layout of each text block, `None` for blocks outside the laid-out area.
     pub(crate) layouts: Vec<Option<TextLayout>>,
@@ -222,6 +292,10 @@ pub struct EditorView {
     pub(crate) slash: Option<Slash>,
     pub(crate) mention: Option<MentionMenu>,
     pub(crate) mention_items: Vec<MentionItem>,
+    /// Hint shown while the document is empty.
+    pub(crate) placeholder: SharedString,
+    /// Search in progress, see [`EditorView::set_search`].
+    search: Option<search::Search>,
     mention_query: String,
     /// Previews of unknown blocks, keyed by the value of their `viewId` attribute.
     pub(crate) embeds: std::collections::HashMap<String, EmbedCard>,
@@ -298,6 +372,7 @@ impl EditorView {
         Self {
             editor: Editor::new(doc),
             theme,
+            labels: EditorLabels::default(),
             focus_handle: cx.focus_handle(),
             layouts: Vec::new(),
             heights: Rc::default(),
@@ -308,6 +383,8 @@ impl EditorView {
             slash: None,
             mention: None,
             mention_items: Vec::new(),
+            search: None,
+            placeholder: SharedString::default(),
             mention_query: String::new(),
             embeds: std::collections::HashMap::new(),
             image_resolver: None,
@@ -398,6 +475,7 @@ impl EditorView {
         self.marked = None;
         self.heights.borrow_mut().clear();
         self.painted = false;
+        self.refresh_search();
         cx.notify();
     }
 
@@ -405,6 +483,28 @@ impl EditorView {
     pub fn set_theme(&mut self, theme: EditorTheme, cx: &mut Context<Self>) {
         self.theme = theme;
         self.heights.borrow_mut().clear();
+        cx.notify();
+    }
+
+    /// Sets the hint shown while the document is a single empty paragraph.
+    pub fn set_placeholder(&mut self, text: impl Into<SharedString>, cx: &mut Context<Self>) {
+        self.placeholder = text.into();
+        self.heights.borrow_mut().clear();
+        cx.notify();
+    }
+
+    /// Whether the placeholder is displayed.
+    #[must_use]
+    pub fn placeholder_shown(&self) -> bool {
+        let blocks = &self.editor.doc().content;
+        !self.placeholder.is_empty()
+            && matches!(blocks.as_slice(), [only] if only.kind == Kind::Paragraph)
+            && self.editor.block_len(0) == 0
+    }
+
+    /// Replaces the interface texts and redraws.
+    pub fn set_labels(&mut self, labels: EditorLabels, cx: &mut Context<Self>) {
+        self.labels = labels;
         cx.notify();
     }
 
@@ -462,6 +562,7 @@ impl EditorView {
         self.caret_moved();
         self.sync_slash();
         self.sync_mention(cx);
+        self.refresh_search();
         cx.emit(EditorEvent::Changed);
         cx.notify();
     }

@@ -4,11 +4,13 @@
 //! order; blocks without text (rules, unknown nodes) are kept but cannot hold the cursor.
 
 mod atoms;
+mod clipboard;
 mod history;
 mod input_rules;
 mod lists;
 mod marks;
 mod navigation;
+mod search;
 mod tree;
 mod typing;
 
@@ -16,6 +18,9 @@ use std::collections::VecDeque;
 use std::sync::{Arc, OnceLock};
 
 use crate::{Kind, Mark, Node};
+
+pub use clipboard::looks_like_markdown;
+pub use search::Match;
 
 use atoms::{Atom, atoms_of, flat_text, rebuild};
 use tree::{Path, blocks_in_order, node_at, node_at_mut};
@@ -138,6 +143,8 @@ pub struct Editor {
     undo: VecDeque<Snapshot>,
     redo: Vec<Snapshot>,
     typing: Option<Pos>,
+    /// Number of changes made to `doc`.
+    revision: u64,
 }
 
 const HISTORY_LIMIT: usize = 500;
@@ -159,6 +166,7 @@ impl Editor {
             undo: VecDeque::new(),
             redo: Vec::new(),
             typing: None,
+            revision: 0,
         }
     }
 
@@ -203,6 +211,7 @@ impl Editor {
     /// Mutable access to the whole document; invalidates the text block index and the alignment
     /// of the shared blocks.
     fn doc_mut(&mut self) -> &mut Node {
+        self.revision += 1;
         self.index.take();
         self.aligned = false;
         &mut self.doc
@@ -217,6 +226,7 @@ impl Editor {
     /// Like [`Editor::node_mut`] for a change that keeps every text block where it is (the inline
     /// content of a text block): the text block index stays valid.
     fn unshared_mut(&mut self, path: &[usize]) -> &mut Node {
+        self.revision += 1;
         match path.first() {
             Some(&top) if self.aligned => {
                 if let Some(entry) = self.shared.get_mut(top) {
@@ -227,6 +237,21 @@ impl Editor {
             None => self.aligned = false,
         }
         node_at_mut(&mut self.doc, path)
+    }
+
+    /// Mutable access to the node at `path` for a change of its children.
+    fn doc_mut_at(&mut self, path: &[usize]) -> &mut Node {
+        if path.is_empty() {
+            self.doc_mut()
+        } else {
+            self.node_mut(path)
+        }
+    }
+
+    /// Changes whenever the document does; the selection does not count.
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// Number of text blocks (paragraphs, headings, code blocks); always at least 1.

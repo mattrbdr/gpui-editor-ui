@@ -91,6 +91,7 @@ impl Editor {
         self.shared = snapshot.children.into_iter().map(Some).collect();
         self.aligned = true;
         self.index.take();
+        self.revision += 1;
         self.selection = snapshot.selection;
         self.stored_marks = None;
         self.typing = None;

@@ -1,7 +1,10 @@
 //! Keyboard actions: navigation, editing, clipboard.
 
 use gpui::{ClipboardItem, Context, TextLayout, Window, point};
-use gpui_editor_core::{Editor, Kind, MarkKind, Pos, Selection};
+/// Clipboard metadata marking Markdown copied by an editor.
+const MARKDOWN: &str = "gpui-editor-markdown";
+
+use gpui_editor_core::{Editor, Kind, MarkKind, Pos, Selection, looks_like_markdown};
 
 use crate::keys;
 
@@ -263,9 +266,15 @@ impl EditorView {
     // --- Actions: editing ---
 
     pub(super) fn edit(&mut self, cx: &mut Context<Self>, run: impl FnOnce(&mut Editor)) {
+        let before = self.editor.revision();
         run(&mut self.editor);
         self.marked = None;
-        self.changed(cx);
+        if self.editor.revision() == before {
+            // Nothing changed (undo with no history, blocked deletion): only the caret may move.
+            self.nav(cx, |_| {});
+        } else {
+            self.changed(cx);
+        }
     }
 
     pub(crate) fn on_backspace(
@@ -445,23 +454,56 @@ impl EditorView {
 
     // --- Clipboard ---
 
-    pub(crate) fn on_copy(&mut self, _: &keys::Copy, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.editor.selection().is_collapsed() {
-            cx.write_to_clipboard(ClipboardItem::new_string(self.editor.selected_text()));
+    /// Puts the selection on the clipboard: Markdown when plain text would lose formatting.
+    fn copy_selection(&self, cx: &mut Context<Self>) {
+        if self.editor.selection().is_collapsed() {
+            return;
         }
+        let item = match self.editor.selected_markdown() {
+            Some(markdown) => ClipboardItem::new_string_with_metadata(markdown, MARKDOWN.into()),
+            None => ClipboardItem::new_string(self.editor.selected_text()),
+        };
+        cx.write_to_clipboard(item);
+    }
+
+    pub(crate) fn on_copy(&mut self, _: &keys::Copy, _: &mut Window, cx: &mut Context<Self>) {
+        self.copy_selection(cx);
     }
 
     pub(crate) fn on_cut(&mut self, _: &keys::Cut, _: &mut Window, cx: &mut Context<Self>) {
         if !self.editor.selection().is_collapsed() {
-            cx.write_to_clipboard(ClipboardItem::new_string(self.editor.selected_text()));
+            self.copy_selection(cx);
             self.edit(cx, Editor::delete_backward);
         }
     }
 
-    pub(crate) fn on_paste(&mut self, _: &keys::Paste, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            let text = text.replace("\r\n", "\n");
+    /// Pastes the clipboard; `raw` never interprets it as Markdown.
+    fn paste(&mut self, raw: bool, cx: &mut Context<Self>) {
+        let Some(item) = cx.read_from_clipboard() else {
+            return;
+        };
+        let Some(text) = item.text() else {
+            return;
+        };
+        let text = text.replace("\r\n", "\n");
+        let own = item.metadata().is_some_and(|metadata| metadata == MARKDOWN);
+        if !raw && (own || looks_like_markdown(&text)) {
+            self.edit(cx, |e| e.paste_markdown(&text));
+        } else {
             self.edit(cx, |e| e.insert_text(&text));
         }
+    }
+
+    pub(crate) fn on_paste(&mut self, _: &keys::Paste, _: &mut Window, cx: &mut Context<Self>) {
+        self.paste(false, cx);
+    }
+
+    pub(crate) fn on_paste_plain(
+        &mut self,
+        _: &keys::PastePlain,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.paste(true, cx);
     }
 }

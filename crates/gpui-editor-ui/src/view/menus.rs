@@ -1,6 +1,6 @@
 //! The `/` menu and the `[[` mention menu.
 
-use gpui::{Context, Window};
+use gpui::{Context, SharedString, Window};
 use gpui_editor_core::{BlockCommand, Kind, Pos};
 
 use crate::keys;
@@ -27,16 +27,17 @@ impl EditorView {
     }
 
     /// Commands matching the filter.
-    pub(crate) fn slash_items(&self) -> Vec<(&'static str, BlockCommand)> {
+    pub(crate) fn slash_items(&self) -> Vec<(SharedString, BlockCommand)> {
         let query = self.slash_query().unwrap_or_default().to_lowercase();
         SLASH_COMMANDS
             .iter()
-            .filter(|(label, keywords, _)| {
+            .map(|(keywords, command)| (keywords, self.labels.command(*command), *command))
+            .filter(|(keywords, label, _)| {
                 query.is_empty()
                     || label.to_lowercase().contains(&query)
                     || keywords.contains(query.as_str())
             })
-            .map(|(label, _, command)| (*label, *command))
+            .map(|(_, label, command)| (label, command))
             .collect()
     }
 
@@ -46,7 +47,7 @@ impl EditorView {
     pub fn slash_items_for_tests(&self) -> Vec<String> {
         self.slash_items()
             .into_iter()
-            .map(|(label, _)| label.to_owned())
+            .map(|(label, _)| label.to_string())
             .collect()
     }
 
@@ -95,7 +96,7 @@ impl EditorView {
     /// Applies menu command `index`: removes `/filter` then converts the block.
     pub(crate) fn run_slash(&mut self, index: usize, cx: &mut Context<Self>) {
         let (Some(slash), Some((_, command))) =
-            (self.slash, self.slash_items().get(index).copied())
+            (self.slash, self.slash_items().get(index).cloned())
         else {
             return;
         };
@@ -119,6 +120,9 @@ impl EditorView {
         if closed_slash || closed_mention {
             self.mention_items.clear();
             cx.notify();
+        } else {
+            // Nothing to close here: let the application react to Escape.
+            cx.propagate();
         }
     }
 

@@ -73,13 +73,20 @@ impl EditorView {
     }
 
     /// Selection rectangles, one visual line at a time.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub(crate) fn selection_quads(&self) -> Vec<Bounds<Pixels>> {
         let selection = self.editor.selection();
-        if selection.is_collapsed() || !self.ready() {
+        if selection.is_collapsed() {
             return Vec::new();
         }
-        let (start, end) = (selection.start(), selection.end());
+        self.range_quads(selection.start(), selection.end())
+    }
+
+    /// Rectangles covering `[start, end)`, one visual line at a time.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub(crate) fn range_quads(&self, start: Pos, end: Pos) -> Vec<Bounds<Pixels>> {
+        if !self.ready() {
+            return Vec::new();
+        }
         let mut quads = Vec::new();
         for block in start.block..=end.block {
             // Blocks outside the laid-out area are not visible: nothing to paint.

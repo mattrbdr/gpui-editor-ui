@@ -13,6 +13,7 @@ categories = ["text-editors", "parser-implementations", "data-structures"]
 
 [dependencies]
 pulldown-cmark = { version = "0.13", default-features = false }
+unicode-normalization = "0.1"
 unicode-segmentation = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 
