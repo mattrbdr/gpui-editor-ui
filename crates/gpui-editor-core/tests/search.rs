@@ -31,8 +31,8 @@ fn a_decomposed_accent_belongs_to_the_match() {
 fn matches_do_not_overlap_and_an_empty_query_finds_nothing() {
     let e = editor("aaaa");
     assert_eq!(spans(&e.find("aa")), [(0, 0, 2), (0, 2, 4)]);
-    assert!(e.find("").is_empty());
-    assert!(e.find("b").is_empty());
+    assert_eq!(e.find("").len(), 0);
+    assert_eq!(e.find("b").len(), 0);
 }
 
 #[test]
